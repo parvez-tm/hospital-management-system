@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1773853094942,
+    "ntc_temp": 36.5,
+    "env_temp": 28.3,
+    "humidity": 65.2,
+    "bp_systolic": 120,
+    "bp_diastolic": 80,
+    "pulse_rate": 78,
+    "spo2": 97,
+    "body_temp": 36.4,
+    "timestamp": "2026-03-18T22:20:00",
+    "receivedAt": "2026-03-18T16:58:14.942Z"
+  },
+  {
+    "id": 1773853131695,
+    "ntc_temp": 36.8,
+    "env_temp": 27.9,
+    "humidity": 62.1,
+    "bp_systolic": 118,
+    "bp_diastolic": 78,
+    "pulse_rate": 82,
+    "spo2": 98,
+    "body_temp": 36.7,
+    "timestamp": "2026-03-18T22:21:00",
+    "receivedAt": "2026-03-18T16:58:51.695Z"
+  }
+]
