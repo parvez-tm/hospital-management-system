@@ -1,6 +1,6 @@
 const express = require("express");
 const { fn, col } = require("sequelize");
-const { User, PatientVitals } = require("../models");
+const { User, PatientVitals, HealthReading } = require("../models");
 const { protect, authorize, tenantIsolation } = require("../middleware/auth");
 
 const router = express.Router();
@@ -142,6 +142,101 @@ router.get(
         totalVisits,
         latestVitals,
         totalDoctors: doctorRows.length,
+      });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Device Health Readings — Patient can view their own ESP32 sensor readings
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/patient/health-readings - Get patient's own device readings
+router.get(
+  "/health-readings",
+  protect,
+  authorize("patient"),
+  async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 100;
+      const readings = await HealthReading.findAll({
+        where: { patientId: req.user.id },
+        order: [["createdAt", "DESC"]],
+        limit,
+      });
+      // Return in chronological order (oldest first) for charts
+      res.json(readings.reverse());
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// GET /api/patient/health-readings/latest - Get most recent device reading
+router.get(
+  "/health-readings/latest",
+  protect,
+  authorize("patient"),
+  async (req, res) => {
+    try {
+      const latest = await HealthReading.findOne({
+        where: { patientId: req.user.id },
+        order: [["createdAt", "DESC"]],
+      });
+      res.json(latest);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// GET /api/patient/health-readings/stats - Get device reading statistics
+router.get(
+  "/health-readings/stats",
+  protect,
+  authorize("patient"),
+  async (req, res) => {
+    try {
+      const count = await HealthReading.count({
+        where: { patientId: req.user.id },
+      });
+
+      if (count === 0) {
+        return res.json({ count: 0 });
+      }
+
+      const latest = await HealthReading.findOne({
+        where: { patientId: req.user.id },
+        order: [["createdAt", "DESC"]],
+      });
+
+      const recent = await HealthReading.findAll({
+        where: { patientId: req.user.id },
+        order: [["createdAt", "DESC"]],
+        limit: 50,
+      });
+
+      const avg = (arr, key) => {
+        const valid = arr.map((r) => r[key]).filter((v) => v != null && v > 0);
+        return valid.length > 0
+          ? +(valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1)
+          : 0;
+      };
+
+      res.json({
+        count,
+        latest,
+        averages: {
+          pulse_rate: avg(recent, "pulse_rate"),
+          spo2: avg(recent, "spo2"),
+          body_temp: avg(recent, "body_temp"),
+          env_temp: avg(recent, "env_temp"),
+          humidity: avg(recent, "humidity"),
+          bp_systolic: avg(recent, "bp_systolic"),
+          bp_diastolic: avg(recent, "bp_diastolic"),
+        },
       });
     } catch (error) {
       res.status(500).json({ message: error.message });

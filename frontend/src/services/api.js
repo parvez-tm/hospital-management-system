@@ -47,4 +47,17 @@ export const getPatientVitals = () => API.get("/patient/vitals");
 export const getPatientVitalDetail = (id) => API.get(`/patient/vitals/${id}`);
 export const getPatientStats = () => API.get("/patient/stats");
 
+// Patient — Device Health Readings (own readings)
+export const getMyHealthReadings = (limit) => API.get("/patient/health-readings", { params: { limit } });
+export const getMyLatestReading = () => API.get("/patient/health-readings/latest");
+export const getMyHealthStats = () => API.get("/patient/health-readings/stats");
+
+// Device / ESP32
+export const startDeviceSession = (data) => API.post("/device/session/start", data);
+export const stopDeviceSession = (data) => API.post("/device/session/stop", data);
+export const getActiveSession = (deviceId) => API.get("/device/session/active", { params: { deviceId } });
+export const getDeviceReadings = (patientId, limit) => API.get(`/device/readings/${patientId}`, { params: { limit } });
+export const getLatestReading = (patientId) => API.get(`/device/readings/${patientId}/latest`);
+export const getReadingStats = (patientId) => API.get(`/device/readings/${patientId}/stats`);
+
 export default API;

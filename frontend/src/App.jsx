@@ -25,6 +25,7 @@ import PatientDetail from "./pages/doctor/PatientDetail";
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import PatientVitals from "./pages/patient/PatientVitals";
 import PatientProfile from "./pages/patient/PatientProfile";
+import PatientDeviceReadings from "./pages/patient/PatientDeviceReadings";
 
 import "./App.css";
 
@@ -87,6 +88,7 @@ function App() {
           >
             <Route index element={<PatientDashboard />} />
             <Route path="vitals" element={<PatientVitals />} />
+            <Route path="device-readings" element={<PatientDeviceReadings />} />
             <Route path="profile" element={<PatientProfile />} />
           </Route>
 
