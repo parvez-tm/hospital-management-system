@@ -1,5 +1,5 @@
 const express = require("express");
-const { User, Hospital, PatientVitals } = require("../models");
+const { User, PatientVitals } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
@@ -7,17 +7,12 @@ const router = express.Router();
 // GET /api/admin/stats - Get overall stats for admin dashboard
 router.get("/stats", protect, authorize("admin"), async (req, res) => {
   try {
-    const totalHospitals = await Hospital.count();
-    const activeHospitals = await Hospital.count({
-      where: { isActive: true },
-    });
+
     const totalDoctors = await User.count({ where: { role: "doctor" } });
     const totalPatients = await User.count({ where: { role: "patient" } });
     const totalRecords = await PatientVitals.count();
 
     res.json({
-      totalHospitals,
-      activeHospitals,
       totalDoctors,
       totalPatients,
       totalRecords,
@@ -27,15 +22,12 @@ router.get("/stats", protect, authorize("admin"), async (req, res) => {
   }
 });
 
-// GET /api/admin/doctors - Get all doctors across all hospitals
+// GET /api/admin/doctors - Get all doctors
 router.get("/doctors", protect, authorize("admin"), async (req, res) => {
   try {
     const doctors = await User.findAll({
       where: { role: "doctor" },
       attributes: { exclude: ["password"] },
-      include: [
-        { model: Hospital, as: "hospital", attributes: ["name"] },
-      ],
     });
     res.json(doctors);
   } catch (error) {
@@ -43,15 +35,12 @@ router.get("/doctors", protect, authorize("admin"), async (req, res) => {
   }
 });
 
-// GET /api/admin/patients - Get all patients across all hospitals
+// GET /api/admin/patients - Get all patients
 router.get("/patients", protect, authorize("admin"), async (req, res) => {
   try {
     const patients = await User.findAll({
       where: { role: "patient" },
       attributes: { exclude: ["password"] },
-      include: [
-        { model: Hospital, as: "hospital", attributes: ["name"] },
-      ],
     });
     res.json(patients);
   } catch (error) {

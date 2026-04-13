@@ -3,7 +3,7 @@ import { getDoctorStats } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import StatCard from "../../components/StatCard";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import { FiUsers, FiClipboard, FiCalendar } from "react-icons/fi";
+import {  FiClipboard, FiCalendar } from "react-icons/fi";
 
 const DoctorDashboard = () => {
   const { user } = useAuth();
@@ -33,19 +33,12 @@ const DoctorDashboard = () => {
           Welcome, Dr. {user?.name} 👋
         </h1>
         <p className="text-gray-500 text-sm mt-1">
-          {user?.hospitalName && `${user.hospitalName} • `}
           {user?.specialization || "General Practice"}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <StatCard
-          title="Hospital Patients"
-          value={stats?.totalPatients || 0}
-          icon={<FiUsers />}
-          color="blue"
-          subtitle="In your hospital"
-        />
+
         <StatCard
           title="Your Total Records"
           value={stats?.totalRecords || 0}

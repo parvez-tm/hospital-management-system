@@ -228,8 +228,7 @@ Admin logs in via the **same login page** as everyone else:
 {
   "username": "dr_smith",
   "password": "password",
-  "role": "doctor",
-  "hospitalId": 1
+  "role": "doctor"
 }
 ```
 
@@ -238,8 +237,7 @@ Admin logs in via the **same login page** as everyone else:
 {
   "username": "john_doe",
   "password": "password",
-  "role": "patient",
-  "hospitalId": 1
+  "role": "patient"
 }
 ```
 

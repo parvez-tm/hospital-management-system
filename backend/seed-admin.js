@@ -2,44 +2,58 @@ require("dotenv").config();
 const { sequelize, connectDB } = require("./config/db");
 const { User } = require("./models");
 
-const seedAdmin = async () => {
+const seedUsers = async () => {
   try {
     await connectDB();
     await sequelize.sync({ alter: true });
 
-    // Check if admin already exists
-    const existing = await User.findOne({
-      where: { username: "admin", role: "admin" },
-    });
+    const users = [
+      {
+        name: "Super Admin",
+        email: "admin@system.com",
+        username: "admin",
+        password: "admin123",
+        contactNo: "0000000000",
+        role: "admin",
+      },
+      {
+        name: "Dr. Smith",
+        email: "dr_smith@system.com",
+        username: "dr_smith",
+        password: "password",
+        contactNo: "1111111111",
+        role: "doctor",
+      },
+      {
+        name: "John Doe",
+        email: "john_doe@system.com",
+        username: "john_doe",
+        password: "password",
+        contactNo: "2222222222",
+        role: "patient",
+      },
+    ];
 
-    if (existing) {
-      console.log("Admin user already exists!");
-      console.log(`  Username: ${existing.username}`);
-      console.log(`  Email: ${existing.email}`);
-      process.exit(0);
+    for (const userData of users) {
+      const existing = await User.findOne({
+        where: { username: userData.username },
+      });
+
+      if (existing) {
+        console.log(`${userData.role} (${userData.username}) already exists`);
+        continue;
+      }
+
+      await User.create(userData);
+      console.log(`${userData.role} (${userData.username}) created`);
     }
 
-    const admin = await User.create({
-      name: "Super Admin",
-      email: "admin@system.com",
-      username: "admin",
-      password: "admin123",
-      contactNo: "0000000000",
-      role: "admin",
-      hospitalId: null,
-    });
-
-    console.log("Admin user created successfully!");
-    console.log("  Username: admin");
-    console.log("  Password: admin123");
-    console.log("  Role: admin");
-    console.log("");
-    console.log("You can now login with these credentials.");
+    console.log("\nSeeding completed!");
     process.exit(0);
   } catch (error) {
-    console.error("Error seeding admin:", error.message);
+    console.error("Error seeding users:", error.message);
     process.exit(1);
   }
 };
 
-seedAdmin();
+seedUsers();

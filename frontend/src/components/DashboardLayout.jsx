@@ -29,7 +29,7 @@ const DashboardLayout = () => {
     if (user?.role === "admin") {
       return [
         { to: "/admin", icon: <FiHome />, label: "Dashboard" },
-        { to: "/admin/hospitals", icon: <FaHospital />, label: "Hospitals" },
+        // { to: "/admin/hospitals", icon: <FaHospital />, label: "Hospitals" },
         { to: "/admin/doctors", icon: <FiUsers />, label: "Doctors" },
         { to: "/admin/patients", icon: <FiUser />, label: "Patients" },
       ];

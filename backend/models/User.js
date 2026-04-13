@@ -34,14 +34,6 @@ const User = sequelize.define(
       type: DataTypes.ENUM("admin", "doctor", "patient"),
       allowNull: false,
     },
-    hospitalId: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "hospitals",
-        key: "id",
-      },
-    },
     // Patient-specific fields
     age: {
       type: DataTypes.INTEGER,
@@ -76,13 +68,13 @@ const User = sequelize.define(
     indexes: [
       {
         unique: true,
-        fields: ["username", "hospitalId"],
-        name: "unique_username_hospital",
+        fields: ["username"],
+        name: "unique_username",
       },
       {
         unique: true,
-        fields: ["email", "hospitalId"],
-        name: "unique_email_hospital",
+        fields: ["email"],
+        name: "unique_email",
       },
     ],
     hooks: {

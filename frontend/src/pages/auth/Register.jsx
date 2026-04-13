@@ -14,13 +14,12 @@ const Register = () => {
     password: "",
     contactNo: "",
     role: "patient",
-    hospitalId: "",
     age: "",
     height: "",
     weight: "",
     specialization: "",
   });
-  const [hospitals, setHospitals] = useState([]);
+  // const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(false);
   const { loginUser, user } = useAuth();
   const navigate = useNavigate();
@@ -29,17 +28,6 @@ const Register = () => {
     if (user) navigate(`/${user.role}`);
   }, [user, navigate]);
 
-  useEffect(() => {
-    const fetchHospitals = async () => {
-      try {
-        const { data } = await getHospitals();
-        setHospitals(data);
-      } catch {
-        // silent
-      }
-    };
-    fetchHospitals();
-  }, []);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -113,28 +101,7 @@ const Register = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Hospital */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hospital</label>
-              <div className="relative">
-                <FaHospital className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <select
-                  name="hospitalId"
-                  value={formData.hospitalId}
-                  onChange={handleChange}
-                  required
-                  className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all appearance-none text-sm"
-                >
-                  <option value="">Select Hospital</option>
-                  {hospitals.map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.name}
-                    </option>
-                  ))}
-                </select>
-                <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
+
 
             {/* Name + Username */}
             <div className="grid grid-cols-2 gap-3">

@@ -25,14 +25,6 @@ const PatientVitals = sequelize.define(
         key: "id",
       },
     },
-    hospitalId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "hospitals",
-        key: "id",
-      },
-    },
     systolic: {
       type: DataTypes.FLOAT,
       allowNull: false,

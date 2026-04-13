@@ -15,7 +15,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", require("./routes/auth"));
-app.use("/api/hospitals", require("./routes/hospital"));
 app.use("/api/doctor", require("./routes/doctor"));
 app.use("/api/patient", require("./routes/patient"));
 app.use("/api/admin", require("./routes/admin"));

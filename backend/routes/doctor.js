@@ -1,7 +1,7 @@
 const express = require("express");
 const { Op } = require("sequelize");
 const { User, PatientVitals } = require("../models");
-const { protect, authorize, tenantIsolation } = require("../middleware/auth");
+const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -10,12 +10,10 @@ router.get(
   "/patients",
   protect,
   authorize("doctor"),
-  tenantIsolation,
   async (req, res) => {
     try {
       const patients = await User.findAll({
         where: {
-          hospitalId: req.hospitalId,
           role: "patient",
         },
         attributes: { exclude: ["password"] },
@@ -32,13 +30,11 @@ router.get(
   "/patients/:id",
   protect,
   authorize("doctor"),
-  tenantIsolation,
   async (req, res) => {
     try {
       const patient = await User.findOne({
         where: {
           id: req.params.id,
-          hospitalId: req.hospitalId,
           role: "patient",
         },
         attributes: { exclude: ["password"] },
@@ -51,7 +47,6 @@ router.get(
       const vitals = await PatientVitals.findAll({
         where: {
           patientId: req.params.id,
-          hospitalId: req.hospitalId,
         },
         include: [
           {
@@ -75,7 +70,6 @@ router.post(
   "/vitals",
   protect,
   authorize("doctor"),
-  tenantIsolation,
   async (req, res) => {
     try {
       const {
@@ -93,7 +87,6 @@ router.post(
       const patient = await User.findOne({
         where: {
           id: patientId,
-          hospitalId: req.hospitalId,
           role: "patient",
         },
       });
@@ -107,7 +100,6 @@ router.post(
       const vitals = await PatientVitals.create({
         patientId,
         doctorId: req.user.id,
-        hospitalId: req.hospitalId,
         systolic,
         diastolic,
         pulse,
@@ -136,12 +128,10 @@ router.get(
   "/stats",
   protect,
   authorize("doctor"),
-  tenantIsolation,
   async (req, res) => {
     try {
       const totalPatients = await User.count({
         where: {
-          hospitalId: req.hospitalId,
           role: "patient",
         },
       });
@@ -149,7 +139,6 @@ router.get(
       const totalRecords = await PatientVitals.count({
         where: {
           doctorId: req.user.id,
-          hospitalId: req.hospitalId,
         },
       });
 
@@ -158,7 +147,6 @@ router.get(
       const todayRecords = await PatientVitals.count({
         where: {
           doctorId: req.user.id,
-          hospitalId: req.hospitalId,
           createdAt: { [Op.gte]: todayStart },
         },
       });

@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "/api",
+  // baseURL: "https://22glf3zb-5000.inc1.devtunnels.ms/api",
+  baseURL: "http://localhost:5000/api",
 });
 
 // Attach token to every request

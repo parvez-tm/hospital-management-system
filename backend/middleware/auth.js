@@ -44,9 +44,7 @@ const authorize = (...roles) => {
 
 // Multi-tenant middleware - ensures data isolation per hospital
 const tenantIsolation = (req, res, next) => {
-  if (req.user && req.user.hospitalId) {
-    req.hospitalId = req.user.hospitalId;
-  }
+  // No-op for current single-tenant API shape.
   next();
 };
 

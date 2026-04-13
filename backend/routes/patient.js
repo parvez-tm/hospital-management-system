@@ -1,6 +1,6 @@
 const express = require("express");
 const { fn, col } = require("sequelize");
-const { User, PatientVitals, Hospital } = require("../models");
+const { User, PatientVitals } = require("../models");
 const { protect, authorize, tenantIsolation } = require("../middleware/auth");
 
 const router = express.Router();
@@ -14,14 +14,7 @@ router.get(
   async (req, res) => {
     try {
       const patient = await User.findByPk(req.user.id, {
-        attributes: { exclude: ["password"] },
-        include: [
-          {
-            model: Hospital,
-            as: "hospital",
-            attributes: ["name", "address", "phone", "email"],
-          },
-        ],
+        attributes: { exclude: ["password"] }
       });
       res.json(patient);
     } catch (error) {
@@ -63,8 +56,7 @@ router.get(
     try {
       const vitals = await PatientVitals.findAll({
         where: {
-          patientId: req.user.id,
-          hospitalId: req.hospitalId,
+          patientId: req.user.id
         },
         include: [
           {
@@ -94,19 +86,13 @@ router.get(
         where: {
           id: req.params.id,
           patientId: req.user.id,
-          hospitalId: req.hospitalId,
         },
         include: [
           {
             model: User,
             as: "doctorInfo",
             attributes: ["name", "specialization"],
-          },
-          {
-            model: Hospital,
-            as: "hospital",
-            attributes: ["name"],
-          },
+          }
         ],
       });
       if (!vital) {
@@ -130,14 +116,12 @@ router.get(
       const totalVisits = await PatientVitals.count({
         where: {
           patientId: req.user.id,
-          hospitalId: req.hospitalId,
         },
       });
 
       const latestVitals = await PatientVitals.findOne({
         where: {
           patientId: req.user.id,
-          hospitalId: req.hospitalId,
         },
         order: [["createdAt", "DESC"]],
         include: [
@@ -149,7 +133,6 @@ router.get(
       const doctorRows = await PatientVitals.findAll({
         where: {
           patientId: req.user.id,
-          hospitalId: req.hospitalId,
         },
         attributes: [[fn("DISTINCT", col("doctorId")), "doctorId"]],
         raw: true,

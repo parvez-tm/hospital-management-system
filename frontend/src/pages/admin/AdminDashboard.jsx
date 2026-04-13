@@ -97,12 +97,12 @@ const AdminDashboard = () => {
             Manage hospitals, view doctors and patients across the entire system.
           </p>
           <div className="space-y-2">
-            <a
+            {/* <a
               href="/admin/hospitals"
               className="block bg-white/10 hover:bg-white/20 rounded-lg px-4 py-3 text-sm font-medium transition-colors"
             >
               → Manage Hospitals
-            </a>
+            </a> */}
             <a
               href="/admin/doctors"
               className="block bg-white/10 hover:bg-white/20 rounded-lg px-4 py-3 text-sm font-medium transition-colors"
