@@ -43,7 +43,6 @@ const DashboardLayout = () => {
     if (user?.role === "patient") {
       return [
         { to: "/patient", icon: <FiHome />, label: "Dashboard" },
-        { to: "/patient/vitals", icon: <FiHeart />, label: "My Vitals" },
         { to: "/patient/device-readings", icon: <FiActivity />, label: "Device Readings" },
         { to: "/patient/profile", icon: <FiUser />, label: "My Profile" },
       ];

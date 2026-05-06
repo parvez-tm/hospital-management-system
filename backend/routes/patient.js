@@ -244,4 +244,58 @@ router.get(
   }
 );
 
+// GET /api/patient/doctors - Get all doctors in the hospital
+router.get(
+  "/doctors",
+  protect,
+  authorize("patient"),
+  async (req, res) => {
+    try {
+      const doctors = await User.findAll({
+        where: { role: "doctor" },
+        attributes: ["id", "name", "specialization"],
+      });
+      res.json(doctors);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// POST /api/patient/vitals - Patient submits their own vitals for doctor review
+router.post(
+  "/vitals",
+  protect,
+  authorize("patient"),
+  async (req, res) => {
+    try {
+      const {
+        systolic,
+        diastolic,
+        pulse,
+        oxygen,
+        temperature,
+        notes,
+        doctorId,
+      } = req.body;
+
+      const vitals = await PatientVitals.create({
+        patientId: req.user.id,
+        doctorId,
+        systolic,
+        diastolic,
+        pulse,
+        oxygen,
+        temperature,
+        prescription: "", // Empty to represent "Pending Review"
+        notes, // Stores patient's symptoms/complaints
+      });
+
+      res.status(201).json(vitals);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
 module.exports = router;

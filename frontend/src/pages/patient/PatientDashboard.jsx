@@ -283,17 +283,12 @@ const PatientDashboard = () => {
         <h3 className="text-lg font-semibold mb-2">Quick Actions</h3>
         <div className="flex flex-wrap gap-3 mt-3">
           <a
-            href="/patient/vitals"
-            className="bg-white/10 hover:bg-white/20 rounded-lg px-5 py-3 text-sm font-medium transition-colors"
-          >
-            → View All Vitals
-          </a>
-          <a
             href="/patient/device-readings"
             className="bg-white/10 hover:bg-white/20 rounded-lg px-5 py-3 text-sm font-medium transition-colors"
           >
-            → Device Readings
+            → View Device Readings & Prescriptions
           </a>
+
           <a
             href="/patient/profile"
             className="bg-white/10 hover:bg-white/20 rounded-lg px-5 py-3 text-sm font-medium transition-colors"

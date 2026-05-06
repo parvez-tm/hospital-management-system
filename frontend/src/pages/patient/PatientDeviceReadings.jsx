@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
-import { getMyHealthReadings, getMyHealthStats, getPatientVitals } from "../../services/api";
+import {
+  getMyHealthReadings,
+  getMyHealthStats,
+  getPatientVitals,
+  getDoctorsForPatient,
+  submitPatientReport,
+} from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
 import {
@@ -9,6 +15,10 @@ import {
   FiActivity,
   FiRadio,
   FiDownload,
+  FiCheckCircle,
+  FiClock,
+  FiPlus,
+  FiX,
 } from "react-icons/fi";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -19,17 +29,43 @@ const PatientDeviceReadings = () => {
   const [vitals, setVitals] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [doctors, setDoctors] = useState([]);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
+  const [patientNotes, setPatientNotes] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+
+  const refreshData = async () => {
+    try {
+      const [readingsRes, statsRes, vitalsRes] = await Promise.all([
+        getMyHealthReadings(100),
+        getMyHealthStats(),
+        getPatientVitals(),
+      ]);
+      setReadings(readingsRes.data);
+      setStats(statsRes.data);
+      setVitals(vitalsRes.data || []);
+    } catch {
+      toast.error("Failed to refresh device readings");
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [readingsRes, statsRes, vitalsRes] = await Promise.all([
+        const [readingsRes, statsRes, vitalsRes, doctorsRes] = await Promise.all([
           getMyHealthReadings(100),
           getMyHealthStats(),
           getPatientVitals(),
+          getDoctorsForPatient(),
         ]);
         setReadings(readingsRes.data);
         setStats(statsRes.data);
         setVitals(vitalsRes.data || []);
+        setDoctors(doctorsRes.data || []);
+        if (doctorsRes.data && doctorsRes.data.length > 0) {
+          setSelectedDoctorId(doctorsRes.data[0].id);
+        }
       } catch {
         toast.error("Failed to load device readings");
       } finally {
@@ -39,29 +75,67 @@ const PatientDeviceReadings = () => {
     fetchData();
   }, []);
 
-  // ── Download full report as PDF ──
-  const downloadFullReport = () => {
-    if (readings.length === 0) {
-      toast.warn("No readings to download");
+  const handleReviewRequest = async (e) => {
+    e.preventDefault();
+    if (!selectedDoctorId) {
+      toast.warn("Please select a doctor to review your report");
       return;
     }
-
-    const doc = new jsPDF({ orientation: "landscape" });
-
-    // ── Elegant Clinical Header ──
-    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
-    doc.rect(0, 0, 297, 28, "F");
-    doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
-    doc.rect(0, 28, 297, 3, "F");
-
-    // Add Logo
+    setSubmittingReport(true);
     try {
-      const logoImg = new Image();
-      logoImg.src = "/logo.jpeg";
-      doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
-    } catch (e) {
-      // Continue without logo
+      const avgHR = stats?.averages?.pulse_rate || 0;
+      const avgSPO2 = stats?.averages?.spo2 || 0;
+      const avgTemp = stats?.averages?.body_temp || 0;
+      const avgSystolic = stats?.averages?.bp_systolic || 0;
+      const avgDiastolic = stats?.averages?.bp_diastolic || 0;
+
+      await submitPatientReport({
+        systolic: avgSystolic,
+        diastolic: avgDiastolic,
+        pulse: avgHR,
+        oxygen: avgSPO2,
+        temperature: avgTemp,
+        notes: patientNotes,
+        doctorId: selectedDoctorId,
+      });
+
+      toast.success("Telemetry report submitted to doctor successfully!");
+      setPatientNotes("");
+      setShowReviewModal(false);
+      
+      // Refresh vitals list
+      const vitalsRes = await getPatientVitals();
+      setVitals(vitalsRes.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to submit review request");
+    } finally {
+      setSubmittingReport(false);
     }
+  };
+
+  // ── Download full report as PDF ──
+  const downloadFullReport = () => {
+    try {
+      if (readings.length === 0) {
+        toast.warn("No readings to download");
+        return;
+      }
+
+      const doc = new jsPDF({ orientation: "landscape" });
+
+      // ── Elegant Clinical Header ──
+      doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
+      doc.rect(0, 0, 297, 28, "F");
+      doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
+      doc.rect(0, 28, 297, 3, "F");
+
+      // Draw premium vector medical logo (prevents image loading crashes)
+      doc.setFillColor(13, 148, 136); // teal-600
+      doc.circle(23, 14, 7, "F");
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(1.5);
+      doc.line(23, 10, 23, 18);
+      doc.line(19, 14, 27, 14);
 
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
@@ -176,10 +250,10 @@ const PatientDeviceReadings = () => {
         new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
         r.pulse_rate ? `${r.pulse_rate} bpm` : "—",
         r.spo2 ? `${r.spo2}%` : "—",
-        r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—",
+        r.body_temp ? `${Number(r.body_temp).toFixed(1)}°C` : "—",
         r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic} mmHg` : "—",
-        r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—",
-        r.humidity ? `${r.humidity.toFixed(1)}%` : "—",
+        r.env_temp ? `${Number(r.env_temp).toFixed(1)}°C` : "—",
+        r.humidity ? `${Number(r.humidity).toFixed(1)}%` : "—",
         status,
       ];
     });
@@ -290,6 +364,10 @@ const PatientDeviceReadings = () => {
 
     doc.save(`device_readings_report_${new Date().toISOString().split("T")[0]}.pdf`);
     toast.success("Report downloaded!");
+    } catch (err) {
+      console.error("PDF generation error: ", err);
+      toast.error("Failed to generate PDF report: " + err.message);
+    }
   };
 
   // ── Download a single reading as a mini report ──
@@ -500,7 +578,7 @@ const PatientDeviceReadings = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             Device Health Readings
@@ -509,14 +587,24 @@ const PatientDeviceReadings = () => {
             Sensor data captured from your monitoring sessions
           </p>
         </div>
-        {readings.length > 0 && (
-          <button
-            onClick={downloadFullReport}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-medium text-sm hover:from-teal-700 hover:to-cyan-700 shadow-lg shadow-teal-200 transition-all"
-          >
-            <FiDownload /> Download Full Report
-          </button>
-        )}
+        <div className="flex items-center gap-2.5">
+          {stats && stats.count > 0 && (
+            <button
+              onClick={() => setShowReviewModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl font-medium text-sm hover:from-orange-600 hover:to-red-700 shadow-lg shadow-orange-200 transition-all"
+            >
+              <FiPlus /> Submit for Doctor Review
+            </button>
+          )}
+          {readings.length > 0 && (
+            <button
+              onClick={downloadFullReport}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-medium text-sm hover:from-teal-700 hover:to-cyan-700 shadow-lg shadow-teal-200 transition-all"
+            >
+              <FiDownload /> Download Full Report
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Summary Stats */}
@@ -590,6 +678,86 @@ const PatientDeviceReadings = () => {
         </div>
       )}
 
+      {/* Review Requests Status Panel */}
+      {vitals.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            Status of Your Doctor Review Requests
+          </h3>
+          <div className="space-y-4">
+            {[...vitals].reverse().map((v, idx) => {
+              const isReviewed = v.prescription || v.notes;
+              return (
+                <div
+                  key={v.id}
+                  className={`rounded-xl border p-4 transition-all ${
+                    isReviewed
+                      ? "bg-gradient-to-r from-emerald-50/50 to-teal-50/30 border-emerald-100"
+                      : "bg-gradient-to-r from-orange-50/50 to-amber-50/30 border-orange-100"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      {isReviewed ? (
+                        <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full">
+                          <FiCheckCircle size={12} /> Reviewed by Dr. {v.doctorInfo?.name || "Practitioner"}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-orange-100 text-orange-800 rounded-full animate-pulse">
+                          <FiClock size={12} /> Pending Doctor Review
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">
+                        Submitted on {new Date(v.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </span>
+                    </div>
+                    <div className="text-xs font-medium text-gray-500">
+                      Vitals: HR: {v.pulse} bpm | SpO₂: {v.oxygen}% | Temp: {v.temperature}°C | BP: {v.systolic}/{v.diastolic}
+                    </div>
+                  </div>
+
+                  {v.notes && !isReviewed && (
+                    <div className="mb-2">
+                      <p className="text-xs font-semibold text-gray-500">Your Symptoms / Notes:</p>
+                      <p className="text-sm text-gray-700 bg-white/60 p-2.5 rounded-lg border border-gray-100 whitespace-pre-wrap mt-1">
+                        {v.notes}
+                      </p>
+                    </div>
+                  )}
+
+                  {isReviewed ? (
+                    <div className="bg-white/80 p-3 rounded-lg border border-emerald-100/50 mt-2">
+                      <p className="text-xs font-bold text-teal-800">Doctor Prescription & Treatment Advice:</p>
+                      {v.prescription && (
+                        <p className="text-sm text-gray-800 font-medium mt-1 whitespace-pre-wrap">
+                          💊 {v.prescription}
+                        </p>
+                      )}
+                      {v.notes && v.prescription && <div className="border-t border-teal-50 my-2" />}
+                      {v.notes && (
+                        <p className="text-xs text-gray-600 italic whitespace-pre-wrap">
+                          Advice: {v.notes}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">
+                      Your doctor has been notified and will review your telemetry data shortly.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Readings Table */}
       {readings.length > 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -610,7 +778,6 @@ const PatientDeviceReadings = () => {
                   <th className="px-4 py-3 text-center">Room Temp</th>
                   <th className="px-4 py-3 text-center">Humidity</th>
                   <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-center">Report</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -663,7 +830,7 @@ const PatientDeviceReadings = () => {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                             isNormal
                               ? "bg-green-100 text-green-700"
                               : "bg-orange-100 text-orange-700"
@@ -671,15 +838,6 @@ const PatientDeviceReadings = () => {
                         >
                           {isNormal ? "Normal" : "Review"}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => downloadSingleReading(r)}
-                          className="text-blue-500 hover:text-blue-700 transition-colors"
-                          title="Download this reading as PDF"
-                        >
-                          <FiDownload size={16} />
-                        </button>
                       </td>
                     </tr>
                   );
@@ -695,6 +853,87 @@ const PatientDeviceReadings = () => {
           <p className="text-sm mt-1">
             Your doctor will start a monitoring session during your visit
           </p>
+        </div>
+      )}
+      {/* Submit Telemetry for Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-lg overflow-hidden transform transition-all">
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-teal-600 to-cyan-600 text-white">
+              <h3 className="text-lg font-bold">Submit Readings for Doctor Review</h3>
+              <button
+                onClick={() => setShowReviewModal(false)}
+                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleReviewRequest} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Select Doctor for Review
+                </label>
+                {doctors.length > 0 ? (
+                  <select
+                    value={selectedDoctorId}
+                    onChange={(e) => setSelectedDoctorId(e.target.value)}
+                    className="w-full py-2 px-3.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 bg-white outline-none"
+                  >
+                    {doctors.map((doc) => (
+                      <option key={doc.id} value={doc.id}>
+                        Dr. {doc.name} ({doc.specialization || "General Practitioner"})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-red-500">No doctors currently available in the hospital</p>
+                )}
+              </div>
+
+              {/* Pre-populated Vitals Summary */}
+              {stats && stats.count > 0 && (
+                <div className="bg-teal-50/50 rounded-xl border border-teal-100/50 p-4">
+                  <p className="text-xs font-bold text-teal-800 mb-2">Pre-populated Telemetry Averages:</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <div>• Heart Rate: <strong className="text-teal-900">{stats.averages.pulse_rate} bpm</strong></div>
+                    <div>• SpO₂ Oxygen: <strong className="text-teal-900">{stats.averages.spo2}%</strong></div>
+                    <div>• Body Temp: <strong className="text-teal-900">{stats.averages.body_temp}°C</strong></div>
+                    <div>• Blood Pressure: <strong className="text-teal-900">{stats.averages.bp_systolic}/{stats.averages.bp_diastolic} mmHg</strong></div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Describe Your Symptoms & Notes
+                </label>
+                <textarea
+                  value={patientNotes}
+                  onChange={(e) => setPatientNotes(e.target.value)}
+                  rows={4}
+                  className="w-full py-2 px-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 bg-white outline-none resize-none"
+                  placeholder="Tell your doctor how you are feeling (e.g., routine checkup, slight chest tightness, headache, etc.)."
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReport || doctors.length === 0}
+                  className="px-5 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 text-white text-sm font-medium rounded-xl hover:from-teal-700 hover:to-cyan-700 shadow-md disabled:opacity-50"
+                >
+                  {submittingReport ? "Submitting..." : "Submit Report"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

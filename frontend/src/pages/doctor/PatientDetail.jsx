@@ -78,10 +78,9 @@ const PatientDetail = () => {
         disease: data.patient.disease || "",
         contactNo: data.patient.contactNo || "",
       });
-      // Get prescriptions from vitals data
+      // Get prescriptions and review requests from vitals data
       if (data.vitals) {
-        const prescriptionRecords = data.vitals.filter(v => v.prescription || v.notes);
-        setPrescriptions(prescriptionRecords);
+        setPrescriptions(data.vitals);
       }
     } catch {
       toast.error("Failed to load patient details");
@@ -713,104 +712,146 @@ const PatientDetail = () => {
             📋 Prescription History ({prescriptions.length})
           </h3>
           <div className="space-y-4">
-            {[...prescriptions].reverse().map((p, idx) => (
-              <div
-                key={p.id}
-                className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-5 hover:shadow-md transition-shadow"
-              >
-                {editingPrescriptionId === p.id ? (
-                  <form onSubmit={handleUpdatePrescription} className="space-y-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-orange-700">
-                        Editing Prescription #{prescriptions.length - idx}
-                      </span>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</label>
-                      <textarea
-                        value={editPrescriptionForm.medicines}
-                        onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, medicines: e.target.value })}
-                        rows={3}
-                        className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-orange-800 mb-1">Medical Notes:</label>
-                      <textarea
-                        value={editPrescriptionForm.notes}
-                        onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, notes: e.target.value })}
-                        rows={2}
-                        className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setEditingPrescriptionId(null)}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium rounded-lg hover:from-orange-600 hover:to-red-700"
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-medium text-orange-700">
-                        Prescription #{prescriptions.length - idx}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500">
-                          {new Date(p.createdAt).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+            {[...prescriptions].reverse().map((p, idx) => {
+              const isReviewRequest = !p.prescription;
+              return (
+                <div
+                  key={p.id}
+                  className={`rounded-xl border p-5 hover:shadow-md transition-all ${
+                    isReviewRequest
+                      ? "bg-gradient-to-br from-red-50/70 to-orange-50/30 border-orange-200 shadow-sm"
+                      : "bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200"
+                  }`}
+                >
+                  {editingPrescriptionId === p.id ? (
+                    <form onSubmit={handleUpdatePrescription} className="space-y-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-orange-700">
+                          {isReviewRequest ? "Adding Prescription to Patient Review Request" : `Editing Prescription #${prescriptions.length - idx}`}
                         </span>
-                        <button
-                          onClick={() => handleEditPrescription(p)}
-                          className="p-1 text-teal-600 hover:bg-teal-50 rounded transition-colors"
-                          title="Edit Prescription"
-                        >
-                          <FiEdit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePrescription(p.id)}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Delete Prescription"
-                        >
-                          <FiTrash2 size={14} />
-                        </button>
                       </div>
-                    </div>
-                    {p.prescription && (
-                      <div className="mb-3">
-                        <p className="text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</p>
-                        <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
-                          {p.prescription}
-                        </p>
-                      </div>
-                    )}
-                    {p.notes && (
                       <div>
-                        <p className="text-xs font-semibold text-orange-800 mb-1">Medical Notes:</p>
-                        <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
-                          {p.notes}
-                        </p>
+                        <label className="block text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</label>
+                        <textarea
+                          value={editPrescriptionForm.medicines}
+                          onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, medicines: e.target.value })}
+                          rows={3}
+                          className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
+                          placeholder="e.g., Paracetamol 500mg twice daily for 3 days."
+                        />
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+                      <div>
+                        <label className="block text-xs font-semibold text-orange-800 mb-1">Doctor's Medical Advice & Notes:</label>
+                        <textarea
+                          value={editPrescriptionForm.notes}
+                          onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, notes: e.target.value })}
+                          rows={2}
+                          className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
+                          placeholder="e.g., Rest, drink plenty of fluids, and monitor temperature."
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setEditingPrescriptionId(null)}
+                          className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white text-xs font-medium rounded-lg hover:from-teal-700 hover:to-cyan-700"
+                        >
+                          Save Review & Prescribe
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`text-sm font-bold ${isReviewRequest ? "text-red-600" : "text-orange-700"}`}>
+                          {isReviewRequest ? "🚨 Patient Telemetry Review Request" : `Prescription #${prescriptions.length - idx}`}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-gray-500">
+                            {new Date(p.createdAt).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <button
+                            onClick={() => handleEditPrescription(p)}
+                            className="p-1 text-teal-600 hover:bg-teal-50 rounded transition-colors"
+                            title={isReviewRequest ? "Add Prescription" : "Edit Prescription"}
+                          >
+                            <FiEdit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePrescription(p.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Display Telemetry values from request if present */}
+                      {(p.pulse > 0 || p.oxygen > 0 || p.temperature > 0) && (
+                        <div className="mb-3 bg-white/60 rounded-xl p-3 border border-orange-100/50">
+                          <p className="text-xs font-bold text-gray-500 mb-1.5">Submitted Telemetry Averages:</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-700">
+                            <div>• Heart Rate: <strong className="text-gray-900">{p.pulse} bpm</strong></div>
+                            <div>• SpO₂: <strong className="text-gray-900">{p.oxygen}%</strong></div>
+                            <div>• Body Temp: <strong className="text-gray-900">{p.temperature}°C</strong></div>
+                            <div>• BP: <strong className="text-gray-900">{p.systolic}/{p.diastolic} mmHg</strong></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {isReviewRequest ? (
+                        <div>
+                          <div className="mb-3">
+                            <p className="text-xs font-semibold text-orange-800 mb-1">Patient Symptoms / Notes:</p>
+                            <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
+                              {p.notes || "Routine check-in request."}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleEditPrescription(p)}
+                            className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg text-xs font-semibold hover:from-orange-600 hover:to-red-700 shadow-md shadow-orange-100 transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <FiEdit2 size={12} /> Review & Add Prescription
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {p.prescription && (
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</p>
+                              <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
+                                {p.prescription}
+                              </p>
+                            </div>
+                          )}
+                          {p.notes && (
+                            <div>
+                              <p className="text-xs font-semibold text-orange-800 mb-1">Medical Notes:</p>
+                              <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
+                                {p.notes}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

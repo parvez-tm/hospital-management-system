@@ -49,6 +49,8 @@ export const updatePatientProfile = (data) => API.put("/patient/profile", data);
 export const getPatientVitals = () => API.get("/patient/vitals");
 export const getPatientVitalDetail = (id) => API.get(`/patient/vitals/${id}`);
 export const getPatientStats = () => API.get("/patient/stats");
+export const getDoctorsForPatient = () => API.get("/patient/doctors");
+export const submitPatientReport = (data) => API.post("/patient/vitals", data);
 
 // Patient — Device Health Readings (own readings)
 export const getMyHealthReadings = (limit) => API.get("/patient/health-readings", { params: { limit } });
