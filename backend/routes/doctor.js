@@ -196,4 +196,66 @@ router.get(
   }
 );
 
+// PUT /api/doctor/vitals/:id - Update a vitals/prescription record
+router.put(
+  "/vitals/:id",
+  protect,
+  authorize("doctor"),
+  async (req, res) => {
+    try {
+      const { systolic, diastolic, pulse, oxygen, temperature, prescription, notes } = req.body;
+      const record = await PatientVitals.findByPk(req.params.id);
+
+      if (!record) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      // Ensure the logged-in doctor created this record
+      if (record.doctorId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to update this record" });
+      }
+
+      await record.update({
+        systolic: systolic !== undefined ? systolic : record.systolic,
+        diastolic: diastolic !== undefined ? diastolic : record.diastolic,
+        pulse: pulse !== undefined ? pulse : record.pulse,
+        oxygen: oxygen !== undefined ? oxygen : record.oxygen,
+        temperature: temperature !== undefined ? temperature : record.temperature,
+        prescription: prescription !== undefined ? prescription : record.prescription,
+        notes: notes !== undefined ? notes : record.notes,
+      });
+
+      res.json(record);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
+// DELETE /api/doctor/vitals/:id - Delete a vitals/prescription record
+router.delete(
+  "/vitals/:id",
+  protect,
+  authorize("doctor"),
+  async (req, res) => {
+    try {
+      const record = await PatientVitals.findByPk(req.params.id);
+
+      if (!record) {
+        return res.status(404).json({ message: "Record not found" });
+      }
+
+      // Ensure the logged-in doctor created this record
+      if (record.doctorId !== req.user.id) {
+        return res.status(403).json({ message: "Not authorized to delete this record" });
+      }
+
+      await record.destroy();
+      res.json({ message: "Record deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
 module.exports = router;

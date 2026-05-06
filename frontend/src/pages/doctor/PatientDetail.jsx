@@ -8,6 +8,9 @@ import {
   getLatestReading,
   getDeviceReadings,
   updateDoctorPatient,
+  addPatientVitals,
+  updatePatientVitals,
+  deletePatientVitals,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
@@ -22,6 +25,8 @@ import {
   FiRadio,
   FiStopCircle,
   FiDownload,
+  FiEdit2,
+  FiTrash2,
 } from "react-icons/fi";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -38,6 +43,18 @@ const PatientDetail = () => {
     weight: "",
     disease: "",
     contactNo: "",
+  });
+  const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
+  const [addingPrescription, setAddingPrescription] = useState(false);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    medicines: "",
+    notes: "",
+  });
+  const [editingPrescriptionId, setEditingPrescriptionId] = useState(null);
+  const [editPrescriptionForm, setEditPrescriptionForm] = useState({
+    medicines: "",
+    notes: "",
   });
 
   // ── Live monitoring state ──
@@ -61,6 +78,11 @@ const PatientDetail = () => {
         disease: data.patient.disease || "",
         contactNo: data.patient.contactNo || "",
       });
+      // Get prescriptions from vitals data
+      if (data.vitals) {
+        const prescriptionRecords = data.vitals.filter(v => v.prescription || v.notes);
+        setPrescriptions(prescriptionRecords);
+      }
     } catch {
       toast.error("Failed to load patient details");
     } finally {
@@ -174,6 +196,69 @@ const PatientDetail = () => {
     }
   };
 
+  const handleAddPrescription = async (e) => {
+    e.preventDefault();
+    if (!prescriptionForm.medicines.trim() && !prescriptionForm.notes.trim()) {
+      toast.warn("Please enter medicines or notes");
+      return;
+    }
+    setAddingPrescription(true);
+    try {
+      await addPatientVitals({
+        patientId: id,
+        systolic: 0,
+        diastolic: 0,
+        pulse: 0,
+        oxygen: 0,
+        temperature: 0,
+        prescription: prescriptionForm.medicines,
+        notes: prescriptionForm.notes,
+      });
+      toast.success("Prescription added successfully");
+      setPrescriptionForm({ medicines: "", notes: "" });
+      setShowPrescriptionForm(false);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to add prescription");
+    } finally {
+      setAddingPrescription(false);
+    }
+  };
+
+  const handleDeletePrescription = async (prescriptionId) => {
+    if (!window.confirm("Are you sure you want to delete this prescription?")) return;
+    try {
+      await deletePatientVitals(prescriptionId);
+      toast.success("Prescription deleted successfully");
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete prescription");
+    }
+  };
+
+  const handleEditPrescription = (p) => {
+    setEditingPrescriptionId(p.id);
+    setEditPrescriptionForm({
+      medicines: p.prescription || "",
+      notes: p.notes || "",
+    });
+  };
+
+  const handleUpdatePrescription = async (e) => {
+    e.preventDefault();
+    try {
+      await updatePatientVitals(editingPrescriptionId, {
+        prescription: editPrescriptionForm.medicines,
+        notes: editPrescriptionForm.notes,
+      });
+      toast.success("Prescription updated successfully");
+      setEditingPrescriptionId(null);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to update prescription");
+    }
+  };
+
   // Format time ago
   const timeAgo = (dateStr) => {
     if (!dateStr) return "";
@@ -195,56 +280,145 @@ const PatientDetail = () => {
     }
     const doc = new jsPDF({ orientation: "landscape" });
 
-    // Header with logo
-    doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 297, 50, "F");
-    
-    // Add logo from public folder
+    // ── Elegant Clinical Header ──
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
+    doc.rect(0, 0, 297, 28, "F");
+    doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
+    doc.rect(0, 28, 297, 3, "F");
+
+    // Add Hospital Logo
     try {
       const logoImg = new Image();
       logoImg.src = "/logo.jpeg";
-      doc.addImage(logoImg, "JPEG", 15, 10, 15, 15);
+      doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
     } catch (e) {
-      // Logo not available, continue without it
+      // Continue without logo
     }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("MEDICARE HEALTHCARE RECORD — CLINICAL ASSESSMENT", 38, 12);
     
-    doc.setTextColor(255);
-    doc.setFontSize(18);
-    doc.text("MediCare HMS - Device Health Readings Report", 35, 18);
-    
-    // Patient Information Section
-    doc.setTextColor(80);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.text("PATIENT INFORMATION", 15, 58);
-    doc.setFillColor(245, 245, 245);
-    doc.rect(15, 60, 267, 30, "F");
-    
-    doc.setTextColor(60);
+    doc.setTextColor(204, 251, 241); // light teal text
+    doc.text("Comprehensive clinical patient health monitoring assessment from sensor telemetry.", 38, 20);
+
+    // Generation Timestamp on Header Right
+    const genDateStr = new Date().toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Generated: ${genDateStr}`, 282, 12, { align: "right" });
+    doc.text(`Total Readings Analyzed: ${reportReadings.length}`, 282, 20, { align: "right" });
+
+    // ── Patient Info Card (Left) ──
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, 36, 130, 26, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    const patientInfo = [
-      `Name: ${patient?.name || "N/A"} | Age: ${patient?.age || "N/A"} | Height: ${patient?.height || "N/A"} | Weight: ${patient?.weight || "N/A"}`,
-      `Disease/Condition: ${patient?.disease || "Not specified"}`,
-      `Email: ${patient?.email || "N/A"} | Phone: ${patient?.contactNo || "N/A"}`,
-      `Generated: ${new Date().toLocaleDateString("en-US", {
-        year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
-      })} | Total Readings: ${reportReadings.length}`,
-    ];
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("PATIENT FILE DETAILS", 20, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("Name:", 20, 48);
+    doc.text("Age / Contact:", 20, 53);
+    doc.text("Email:", 20, 58);
+
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.setFont("helvetica", "bold");
+    doc.text(patient?.name || "N/A", 31, 48);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${patient?.age || "N/A"} yrs  |  ${patient?.contactNo || "N/A"}`, 41, 53);
+    doc.text(patient?.email || "N/A", 30, 58);
+
+    doc.setTextColor(100, 116, 139);
+    doc.text("Height / Weight:", 82, 48);
+    doc.text("Condition:", 82, 53);
     
-    let yPos = 65;
-    patientInfo.forEach((info) => {
-      doc.text(info, 18, yPos);
-      yPos += 6;
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${patient?.height ? patient.height + " cm" : "—"}  /  ${patient?.weight ? patient.weight + " kg" : "—"}`, 105, 48);
+    doc.setFont("helvetica", "bold");
+    doc.text(patient?.disease || "Not specified", 97, 53);
+
+    // ── Calculate Health Averages from Telemetry ──
+    let avgHR = 0, avgSPO2 = 0, avgTemp = 0, avgSystolic = 0, avgDiastolic = 0;
+    let countHR = 0, countSPO2 = 0, countTemp = 0, countBP = 0;
+
+    reportReadings.forEach(r => {
+      if (r.pulse_rate) { avgHR += r.pulse_rate; countHR++; }
+      if (r.spo2) { avgSPO2 += r.spo2; countSPO2++; }
+      if (r.body_temp) { avgTemp += r.body_temp; countTemp++; }
+      if (r.bp_systolic && r.bp_diastolic) { avgSystolic += r.bp_systolic; avgDiastolic += r.bp_diastolic; countBP++; }
     });
 
+    avgHR = countHR > 0 ? Math.round(avgHR / countHR) : "—";
+    avgSPO2 = countSPO2 > 0 ? Math.round(avgSPO2 / countSPO2) : "—";
+    avgTemp = countTemp > 0 ? (avgTemp / countTemp).toFixed(1) : "—";
+    avgSystolic = countBP > 0 ? Math.round(avgSystolic / countBP) : "—";
+    avgDiastolic = countBP > 0 ? Math.round(avgDiastolic / countBP) : "—";
+
+    // ── Health Summary Averages Card (Right) ──
+    doc.setFillColor(240, 253, 250); // teal-50
+    doc.setDrawColor(204, 251, 241); // teal-100
+    doc.roundedRect(152, 36, 130, 26, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("HEALTH TELEMETRY SUMMARY (AVERAGES)", 157, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("HEART RATE", 157, 48);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(220, 38, 38); // red-600
+    doc.text(`${avgHR} bpm`, 157, 56);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("OXYGEN SpO₂", 192, 48);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(37, 99, 235); // blue-600
+    doc.text(`${avgSPO2}%`, 192, 56);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("BODY TEMP", 224, 48);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(217, 119, 6); // amber-600
+    doc.text(`${avgTemp}°C`, 224, 56);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("BLOOD PRESSURE", 254, 48);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(109, 40, 217); // purple-600
+    doc.text(`${avgSystolic}/${avgDiastolic}`, 254, 56);
+
+    // ── Table Data Formatter ──
     const tableData = [...reportReadings].reverse().map((r) => {
       const status = r.spo2 >= 95 && r.pulse_rate >= 50 && r.pulse_rate <= 110 && r.bp_systolic < 140 ? "Normal" : "Review";
       return [
-        new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        r.pulse_rate || "—",
+        r.pulse_rate ? `${r.pulse_rate} bpm` : "—",
         r.spo2 ? `${r.spo2}%` : "—",
         r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—",
-        r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic}` : "—",
+        r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic} mmHg` : "—",
         r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—",
         r.humidity ? `${r.humidity.toFixed(1)}%` : "—",
         status,
@@ -252,25 +426,126 @@ const PatientDetail = () => {
     });
 
     autoTable(doc, {
-      startY: 96,
-      head: [["Date", "Time", "HR (bpm)", "SpO₂", "Body Temp", "BP", "Room Temp", "Humidity", "Status"]],
+      startY: 67,
+      head: [["Date", "Time", "HR (bpm)", "SpO₂", "Body Temp", "BP (mmHg)", "Room Temp", "Humidity", "Status"]],
       body: tableData,
       theme: "striped",
-      headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [15, 23, 42], fontSize: 8, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 7, cellPadding: 2, halign: "center" },
+      columnStyles: {
+        0: { halign: "left" },
+        1: { halign: "left" },
+        8: { fontStyle: "bold" },
+      },
       didParseCell: (data) => {
         if (data.column.index === 8 && data.section === "body") {
-          data.cell.styles.textColor = data.cell.raw === "Review" ? [234, 88, 12] : [22, 163, 74];
+          data.cell.styles.textColor = data.cell.raw === "Review" ? [220, 38, 38] : [22, 163, 74];
         }
       },
     });
 
+    // ── High-fidelity Prescription Cards Section ──
+    if (prescriptions.length > 0) {
+      const lastTableY = doc.lastAutoTable.finalY + 8;
+      let prescY = lastTableY;
+      
+      if (prescY > 140) {
+        doc.addPage();
+        prescY = 20;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text("HISTORICAL PRESCRIPTIONS & CLINICAL NOTES", 15, prescY);
+      prescY += 5;
+
+      prescriptions.slice(-2).forEach((p, idx) => {
+        if (prescY > 165) {
+          doc.addPage();
+          prescY = 20;
+        }
+
+        // Draw elegant container
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(241, 245, 249); // slate-100 card border
+        doc.roundedRect(15, prescY, 267, 28, 1, 1, "FD");
+
+        // Amber Rx Side Panel
+        doc.setFillColor(254, 243, 199); // amber-100
+        doc.rect(15, prescY, 12, 28, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(217, 119, 6); // amber-600 Rx Symbol
+        doc.text("Rx", 18, prescY + 16);
+
+        // Date of prescription
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184); // slate-400
+        const pDate = new Date(p.createdAt).toLocaleDateString("en-US", {
+          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+        });
+        doc.text(`Prescription Date: ${pDate}`, 32, prescY + 5);
+
+        // Medicines details
+        if (p.prescription) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(13, 148, 136); // teal-600
+          doc.text("Medicines & Dosage Instructions:", 32, prescY + 10);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(51, 65, 85); // slate-700
+          const medLines = doc.splitTextToSize(p.prescription, 110);
+          doc.text(medLines, 32, prescY + 14);
+        }
+
+        // Doctor's notes details
+        if (p.notes) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(13, 148, 136); // teal-600
+          doc.text("Doctor Advice & Clinical Notes:", 152, prescY + 10);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(51, 65, 85); // slate-700
+          const noteLines = doc.splitTextToSize(p.notes, 125);
+          doc.text(noteLines, 152, prescY + 14);
+        }
+
+        prescY += 32;
+      });
+
+      // Signature Section
+      if (prescY > 175) {
+        doc.addPage();
+        prescY = 20;
+      }
+      
+      const sigY = 190;
+      doc.setDrawColor(148, 163, 184);
+      doc.line(210, sigY, 282, sigY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Authorized Clinical Physician", 210, sigY + 4);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Dr. Medicare Practitioner", 210, sigY + 8);
+      doc.setFont("helvetica", "italic");
+      doc.text("Electronic Signature Verification", 210, sigY + 11);
+    }
+
+    // Footers
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(7);
-      doc.setTextColor(150);
-      doc.text(`System-generated report — Page ${i}/${pageCount}`, 15, doc.internal.pageSize.height - 5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`System-Generated Comprehensive Health Report — Page ${i} of ${pageCount}`, 15, doc.internal.pageSize.height - 5);
+      doc.text("Confidential Clinical Data • MediCare HMS", 282, doc.internal.pageSize.height - 5, { align: "right" });
     }
 
     doc.save(`device_readings_${patient?.name?.replace(/\s+/g, "_") || "patient"}_${new Date().toISOString().split("T")[0]}.pdf`);
@@ -334,6 +609,20 @@ const PatientDetail = () => {
               </>
             )}
           </button>
+          <button
+            onClick={() => setShowPrescriptionForm(!showPrescriptionForm)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl font-medium text-sm hover:from-orange-600 hover:to-red-700 shadow-lg shadow-orange-200 transition-all"
+          >
+            {showPrescriptionForm ? (
+              <>
+                <FiX /> Cancel
+              </>
+            ) : (
+              <>
+                <FiPlus /> Prescription
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -370,6 +659,161 @@ const PatientDetail = () => {
           </p>
         </div>
       </div>
+
+      {/* Prescription & Medical Notes Form */}
+      {showPrescriptionForm && (
+        <div className="mb-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-lg border border-orange-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            💊 Add Prescription & Medical Notes
+          </h3>
+          <form onSubmit={handleAddPrescription} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Medicines & Dosage
+              </label>
+              <textarea
+                value={prescriptionForm.medicines}
+                onChange={(e) =>
+                  setPrescriptionForm({ ...prescriptionForm, medicines: e.target.value })
+                }
+                rows={4}
+                className="w-full py-2.5 px-4 border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none resize-none bg-white"
+                placeholder="Enter medicines, dosage, frequency, and duration&#10;Example: Aspirin 500mg - 1 tablet twice daily for 7 days"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Medical Notes & Instructions
+              </label>
+              <textarea
+                value={prescriptionForm.notes}
+                onChange={(e) =>
+                  setPrescriptionForm({ ...prescriptionForm, notes: e.target.value })
+                }
+                rows={3}
+                className="w-full py-2.5 px-4 border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none resize-none bg-white"
+                placeholder="Additional notes, warnings, follow-up instructions, etc."
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={addingPrescription}
+              className="px-8 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-medium rounded-xl text-sm hover:from-orange-600 hover:to-red-700 shadow-lg shadow-orange-200 transition-all disabled:opacity-50"
+            >
+              {addingPrescription ? "Saving..." : "Save Prescription"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Prescription History */}
+      {prescriptions.length > 0 && (
+        <div className="mb-6 bg-white rounded-2xl shadow-lg border border-orange-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            📋 Prescription History ({prescriptions.length})
+          </h3>
+          <div className="space-y-4">
+            {[...prescriptions].reverse().map((p, idx) => (
+              <div
+                key={p.id}
+                className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200 p-5 hover:shadow-md transition-shadow"
+              >
+                {editingPrescriptionId === p.id ? (
+                  <form onSubmit={handleUpdatePrescription} className="space-y-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-orange-700">
+                        Editing Prescription #{prescriptions.length - idx}
+                      </span>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</label>
+                      <textarea
+                        value={editPrescriptionForm.medicines}
+                        onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, medicines: e.target.value })}
+                        rows={3}
+                        className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-orange-800 mb-1">Medical Notes:</label>
+                      <textarea
+                        value={editPrescriptionForm.notes}
+                        onChange={(e) => setEditPrescriptionForm({ ...editPrescriptionForm, notes: e.target.value })}
+                        rows={2}
+                        className="w-full py-2 px-3 border border-orange-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-orange-400"
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPrescriptionId(null)}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium rounded-lg hover:from-orange-600 hover:to-red-700"
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-orange-700">
+                        Prescription #{prescriptions.length - idx}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500">
+                          {new Date(p.createdAt).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <button
+                          onClick={() => handleEditPrescription(p)}
+                          className="p-1 text-teal-600 hover:bg-teal-50 rounded transition-colors"
+                          title="Edit Prescription"
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePrescription(p.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Delete Prescription"
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    {p.prescription && (
+                      <div className="mb-3">
+                        <p className="text-xs font-semibold text-orange-800 mb-1">Medicines & Dosage:</p>
+                        <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
+                          {p.prescription}
+                        </p>
+                      </div>
+                    )}
+                    {p.notes && (
+                      <div>
+                        <p className="text-xs font-semibold text-orange-800 mb-1">Medical Notes:</p>
+                        <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
+                          {p.notes}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* DEVICE READINGS PANEL                                             */}

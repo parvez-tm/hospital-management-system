@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getMyHealthReadings, getMyHealthStats } from "../../services/api";
+import { getMyHealthReadings, getMyHealthStats, getPatientVitals } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
 import {
@@ -16,17 +16,20 @@ import { autoTable } from "jspdf-autotable";
 const PatientDeviceReadings = () => {
   const [readings, setReadings] = useState([]);
   const [stats, setStats] = useState(null);
+  const [vitals, setVitals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [readingsRes, statsRes] = await Promise.all([
+        const [readingsRes, statsRes, vitalsRes] = await Promise.all([
           getMyHealthReadings(100),
           getMyHealthStats(),
+          getPatientVitals(),
         ]);
         setReadings(readingsRes.data);
         setStats(statsRes.data);
+        setVitals(vitalsRes.data || []);
       } catch {
         toast.error("Failed to load device readings");
       } finally {
@@ -45,60 +48,136 @@ const PatientDeviceReadings = () => {
 
     const doc = new jsPDF({ orientation: "landscape" });
 
-    // Header bar
-    doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 297, 35, "F");
-    doc.setTextColor(255);
-    doc.setFontSize(18);
-    doc.text("MediCare HMS", 15, 15);
-    doc.setFontSize(10);
-    doc.text("Device Health Readings Report", 15, 23);
-    doc.text(
-      `Generated: ${new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`,
-      15,
-      30
-    );
-    doc.text(`Total Readings: ${readings.length}`, 200, 23);
+    // ── Elegant Clinical Header ──
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
+    doc.rect(0, 0, 297, 28, "F");
+    doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
+    doc.rect(0, 28, 297, 3, "F");
 
-    // Averages summary
-    if (stats && stats.count > 0) {
-      doc.text(
-        `Averages — HR: ${stats.averages.pulse_rate} bpm | SpO₂: ${stats.averages.spo2}% | Temp: ${stats.averages.body_temp}°C | BP: ${stats.averages.bp_systolic}/${stats.averages.bp_diastolic} mmHg`,
-        200,
-        30
-      );
+    // Add Logo
+    try {
+      const logoImg = new Image();
+      logoImg.src = "/logo.jpeg";
+      doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
+    } catch (e) {
+      // Continue without logo
     }
 
-    // Readings table
-    const tableData = [...readings].reverse().map((r) => {
-      const spo2Ok = r.spo2 >= 95;
-      const hrOk = r.pulse_rate >= 50 && r.pulse_rate <= 110;
-      const bpOk = r.bp_systolic < 140;
-      const status = spo2Ok && hrOk && bpOk ? "Normal" : "Review";
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("MEDICARE CLINICAL TELEMETRY LOG", 38, 12);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(204, 251, 241); // light teal text
+    doc.text("Certified patient vital signs log captured from remote sensor telemetry.", 38, 20);
 
+    // Generation Timestamp on Header Right
+    const genDateStr = new Date().toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Generated: ${genDateStr}`, 282, 12, { align: "right" });
+    doc.text(`Total Readings: ${readings.length}`, 282, 20, { align: "right" });
+
+    // ── Patient Info Card (Left) ──
+    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, 36, 130, 26, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("PATIENT FILE DETAILS", 20, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("Name:", 20, 48);
+    doc.text("Age / Contact:", 20, 53);
+    doc.text("Email:", 20, 58);
+
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.setFont("helvetica", "bold");
+    doc.text(userInfo?.name || "N/A", 31, 48);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${userInfo?.age || "—"} yrs  |  ${userInfo?.contactNo || "—"}`, 41, 53);
+    doc.text(userInfo?.email || "—", 30, 58);
+
+    doc.setTextColor(100, 116, 139);
+    doc.text("Height / Weight:", 82, 48);
+    doc.text("Condition:", 82, 53);
+    
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${userInfo?.height ? userInfo.height + " cm" : "—"}  /  ${userInfo?.weight ? userInfo.weight + " kg" : "—"}`, 105, 48);
+    doc.setFont("helvetica", "bold");
+    doc.text(userInfo?.disease || "Not specified", 97, 53);
+
+    // ── Health Summary Averages Card (Right) ──
+    doc.setFillColor(240, 253, 250); // teal-50
+    doc.setDrawColor(204, 251, 241); // teal-100
+    doc.roundedRect(152, 36, 130, 26, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("HEALTH SUMMARY AVERAGES (METRICS)", 157, 42);
+
+    if (stats && stats.count > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("HEART RATE", 157, 48);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(220, 38, 38); // red-600
+      doc.text(`${stats.averages.pulse_rate} bpm`, 157, 56);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("OXYGEN SpO₂", 192, 48);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(37, 99, 235); // blue-600
+      doc.text(`${stats.averages.spo2}%`, 192, 56);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("BODY TEMP", 224, 48);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(217, 119, 6); // amber-600
+      doc.text(`${stats.averages.body_temp}°C`, 224, 56);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("BLOOD PRESSURE", 254, 48);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(109, 40, 217); // purple-600
+      doc.text(`${stats.averages.bp_systolic}/${stats.averages.bp_diastolic}`, 254, 56);
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("No stats summary available.", 157, 48);
+    }
+
+    // ── Readings Table Formatting ──
+    const tableData = [...readings].reverse().map((r) => {
+      const status = r.spo2 >= 95 && r.pulse_rate >= 50 && r.pulse_rate <= 110 && r.bp_systolic < 140 ? "Normal" : "Review";
       return [
-        new Date(r.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
-        new Date(r.createdAt).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-        r.pulse_rate || "—",
+        new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        r.pulse_rate ? `${r.pulse_rate} bpm` : "—",
         r.spo2 ? `${r.spo2}%` : "—",
         r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—",
-        r.bp_systolic && r.bp_diastolic
-          ? `${r.bp_systolic}/${r.bp_diastolic}`
-          : "—",
+        r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic} mmHg` : "—",
         r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—",
         r.humidity ? `${r.humidity.toFixed(1)}%` : "—",
         status,
@@ -106,61 +185,110 @@ const PatientDeviceReadings = () => {
     });
 
     autoTable(doc, {
-      startY: 42,
-      head: [
-        [
-          "Date",
-          "Time",
-          "Heart Rate (bpm)",
-          "SpO₂",
-          "Body Temp",
-          "Blood Pressure",
-          "Room Temp",
-          "Humidity",
-          "Status",
-        ],
-      ],
+      startY: 67,
+      head: [["Date", "Time", "HR (bpm)", "SpO₂", "Body Temp", "BP (mmHg)", "Room Temp", "Humidity", "Status"]],
       body: tableData,
       theme: "striped",
-      headStyles: { fillColor: [13, 148, 136], fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [15, 23, 42], fontSize: 8, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 7, cellPadding: 2, halign: "center" },
       columnStyles: {
-        0: { cellWidth: 28 },
-        1: { cellWidth: 24 },
+        0: { halign: "left" },
+        1: { halign: "left" },
         8: { fontStyle: "bold" },
       },
       didParseCell: (data) => {
         if (data.column.index === 8 && data.section === "body") {
-          if (data.cell.raw === "Review") {
-            data.cell.styles.textColor = [234, 88, 12]; // orange
-          } else {
-            data.cell.styles.textColor = [22, 163, 74]; // green
-          }
+          data.cell.styles.textColor = data.cell.raw === "Review" ? [220, 38, 38] : [22, 163, 74];
         }
       },
     });
 
-    // Footer
+    // ── Integrated Rx Prescriptions Section ──
+    const activePrescriptions = vitals.filter(v => v.prescription || v.notes);
+    if (activePrescriptions.length > 0) {
+      const lastTableY = doc.lastAutoTable.finalY + 8;
+      let prescY = lastTableY;
+      
+      if (prescY > 140) {
+        doc.addPage();
+        prescY = 20;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text("RECENT PRESCRIPTIONS & ADVICE", 15, prescY);
+      prescY += 5;
+
+      activePrescriptions.slice(-2).forEach((p, idx) => {
+        if (prescY > 165) {
+          doc.addPage();
+          prescY = 20;
+        }
+
+        // Card Container
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(241, 245, 249); // slate-100 card border
+        doc.roundedRect(15, prescY, 267, 28, 1, 1, "FD");
+
+        // Amber Rx Side Panel
+        doc.setFillColor(254, 243, 199); // amber-100
+        doc.rect(15, prescY, 12, 28, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(217, 119, 6); // amber-600 Rx Symbol
+        doc.text("Rx", 18, prescY + 16);
+
+        // Date of prescription
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184); // slate-400
+        const pDate = new Date(p.createdAt).toLocaleDateString("en-US", {
+          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
+        doc.text(`Prescription Date: ${pDate}`, 32, prescY + 5);
+
+        // Medicines details
+        if (p.prescription) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(13, 148, 136); // teal-600
+          doc.text("Medicines & Dosage Instructions:", 32, prescY + 10);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(51, 65, 85); // slate-700
+          const medLines = doc.splitTextToSize(p.prescription, 110);
+          doc.text(medLines, 32, prescY + 14);
+        }
+
+        // Doctor's notes details
+        if (p.notes) {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7.5);
+          doc.setTextColor(13, 148, 136); // teal-600
+          doc.text("Doctor Advice & Clinical Notes:", 152, prescY + 10);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(51, 65, 85); // slate-700
+          const noteLines = doc.splitTextToSize(p.notes, 125);
+          doc.text(noteLines, 152, prescY + 14);
+        }
+
+        prescY += 32;
+      });
+    }
+
+    // Footers
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(7);
-      doc.setTextColor(150);
-      doc.text(
-        `This is a system-generated report from MediCare HMS — Page ${i} of ${pageCount}`,
-        15,
-        doc.internal.pageSize.height - 8
-      );
-      doc.text(
-        "Note: Blood pressure values are estimated from heart rate. Body temperature is approximate.",
-        15,
-        doc.internal.pageSize.height - 4
-      );
+      doc.setTextColor(148, 163, 184);
+      doc.text(`System-Generated Clinical Telemetry Log — Page ${i} of ${pageCount}`, 15, doc.internal.pageSize.height - 8);
+      doc.text("Confidential Clinical Record • MediCare HMS", 282, doc.internal.pageSize.height - 8, { align: "right" });
     }
 
-    doc.save(
-      `device_readings_report_${new Date().toISOString().split("T")[0]}.pdf`
-    );
+    doc.save(`device_readings_report_${new Date().toISOString().split("T")[0]}.pdf`);
     toast.success("Report downloaded!");
   };
 
@@ -168,123 +296,203 @@ const PatientDeviceReadings = () => {
   const downloadSingleReading = (r) => {
     const doc = new jsPDF();
 
-    // Header
-    doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 210, 40, "F");
-    doc.setTextColor(255);
-    doc.setFontSize(20);
-    doc.text("MediCare HMS", 15, 18);
-    doc.setFontSize(10);
-    doc.text("Device Health Reading Report", 15, 28);
-    doc.text(
-      `Date: ${new Date(r.createdAt).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })}`,
-      15,
-      35
-    );
-    doc.text(
-      `Time: ${new Date(r.createdAt).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })}`,
-      130,
-      28
-    );
-    doc.text(`Device: ${r.deviceId || "ESP32-001"}`, 130, 35);
+    // ── Elegant Clinical Header ──
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
+    doc.rect(0, 0, 210, 28, "F");
+    doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
+    doc.rect(0, 28, 210, 3, "F");
+
+    // Add Logo
+    try {
+      const logoImg = new Image();
+      logoImg.src = "/logo.jpeg";
+      doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
+    } catch (e) {
+      // Continue without logo
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("MEDICARE HEALTHCARE — CLINICAL ASSESSMENT SLIP", 38, 12);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(204, 251, 241); // light teal text
+    doc.text("Instant telemetry vital signs reading captured from remote medical monitoring.", 38, 20);
+
+    // Generation Dates on Header Right
+    const recDate = new Date(r.createdAt).toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric"
+    });
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Log Date: ${recDate}`, 195, 12, { align: "right" });
+    doc.text(`Time: ${new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`, 195, 20, { align: "right" });
+
+    // ── Patient Info Card ──
+    const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, 36, 180, 28, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("PATIENT FILE DETAILS", 20, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("Name:", 20, 48);
+    doc.text("Age / Contact:", 20, 53);
+    doc.text("Email:", 20, 58);
+
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.setFont("helvetica", "bold");
+    doc.text(userInfo?.name || "N/A", 31, 48);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${userInfo?.age || "—"} yrs  |  ${userInfo?.contactNo || "—"}`, 41, 53);
+    doc.text(userInfo?.email || "—", 30, 58);
+
+    doc.setTextColor(100, 116, 139);
+    doc.text("Height / Weight:", 110, 48);
+    doc.text("Condition:", 110, 53);
+    doc.text("Device Serial:", 110, 58);
+
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${userInfo?.height ? userInfo.height + " cm" : "—"}  /  ${userInfo?.weight ? userInfo.weight + " kg" : "—"}`, 133, 48);
+    doc.setFont("helvetica", "bold");
+    doc.text(userInfo?.disease || "Not specified", 126, 53);
+    doc.text(r.deviceId || "ESP32-001", 130, 58);
 
     const spo2Ok = r.spo2 >= 95;
     const hrOk = r.pulse_rate >= 50 && r.pulse_rate <= 110;
     const bpOk = r.bp_systolic < 140;
 
-    // Vitals table
+    // ── Upgraded Vitals AutoTable with Standards ──
     autoTable(doc, {
-      startY: 50,
-      head: [["Parameter", "Value", "Unit", "Status"]],
+      startY: 70,
+      head: [["Vitals Parameter", "Observed Value", "Standard Reference Range", "Status"]],
       body: [
-        [
-          "Heart Rate",
-          r.pulse_rate || "—",
-          "bpm",
-          hrOk ? "Normal" : "Review",
-        ],
-        [
-          "Blood Oxygen (SpO₂)",
-          r.spo2 || "—",
-          "%",
-          spo2Ok ? "Normal" : "Low",
-        ],
-        [
-          "Body Temperature",
-          r.body_temp ? r.body_temp.toFixed(1) : "—",
-          "°C",
-          r.body_temp >= 36.0 && r.body_temp <= 37.5 ? "Normal" : "Review",
-        ],
-        [
-          "Systolic BP",
-          r.bp_systolic || "—",
-          "mmHg",
-          bpOk ? "Normal" : "High",
-        ],
-        [
-          "Diastolic BP",
-          r.bp_diastolic || "—",
-          "mmHg",
-          r.bp_diastolic < 90 ? "Normal" : "High",
-        ],
-        ["Room Temperature", r.env_temp ? r.env_temp.toFixed(1) : "—", "°C", "—"],
-        ["Humidity", r.humidity ? r.humidity.toFixed(1) : "—", "%", "—"],
+        ["Heart / Pulse Rate", r.pulse_rate ? `${r.pulse_rate} bpm` : "—", "50 - 110 bpm", hrOk ? "Normal" : "Review"],
+        ["Blood Oxygen (SpO₂)", r.spo2 ? `${r.spo2}%` : "—", "95% - 100%", spo2Ok ? "Normal" : "Low"],
+        ["Body Temperature", r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—", "36.0°C - 37.5°C", r.body_temp >= 36.0 && r.body_temp <= 37.5 ? "Normal" : "Review"],
+        ["Systolic Blood Pressure", r.bp_systolic ? `${r.bp_systolic} mmHg` : "—", "< 140 mmHg", bpOk ? "Normal" : "High"],
+        ["Diastolic Blood Pressure", r.bp_diastolic ? `${r.bp_diastolic} mmHg` : "—", "< 90 mmHg", r.bp_diastolic < 90 ? "Normal" : "High"],
+        ["Room Temperature", r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—", "—", "—"],
+        ["Environment Humidity", r.humidity ? `${r.humidity.toFixed(1)}%` : "—", "—", "—"],
       ],
       theme: "striped",
-      headStyles: { fillColor: [13, 148, 136] },
-      styles: { fontSize: 11 },
+      headStyles: { fillColor: [15, 23, 42], fontSize: 8.5, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 8, cellPadding: 3, halign: "center" },
+      columnStyles: {
+        0: { halign: "left", fontStyle: "bold" },
+        1: { halign: "center" },
+        3: { fontStyle: "bold" },
+      },
       didParseCell: (data) => {
         if (data.column.index === 3 && data.section === "body") {
           const val = data.cell.raw;
           if (val === "Normal") data.cell.styles.textColor = [22, 163, 74];
-          else if (val === "Review" || val === "High" || val === "Low")
-            data.cell.styles.textColor = [234, 88, 12];
+          else if (val === "Review" || val === "High" || val === "Low") data.cell.styles.textColor = [220, 38, 38];
         }
-      },
+      }
     });
 
-    // Notes
-    const notesY = doc.lastAutoTable.finalY + 15;
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    doc.text("⚠ Notes:", 15, notesY);
-    doc.setFontSize(8);
-    doc.text(
-      "• Blood pressure values are estimated from heart rate — not a direct measurement.",
-      15,
-      notesY + 7
-    );
-    doc.text(
-      "• Body temperature is approximate (derived from sensor die temperature + calibration offset).",
-      15,
-      notesY + 13
-    );
-    doc.text(
-      "• Heart rate and SpO₂ readings are from a MAX30102 sensor — for reference only, not medical-grade.",
-      15,
-      notesY + 19
-    );
+    // ── Integrated Rx Prescription Pad ──
+    let prescY = doc.lastAutoTable.finalY + 8;
+    if (prescY > 175) {
+      doc.addPage();
+      prescY = 20;
+    }
 
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(
-      "This is a system-generated report from MediCare HMS",
-      15,
-      285
-    );
+    const latestPrescription = vitals.find(v => v.prescription || v.notes);
+    if (latestPrescription) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text("LATEST MEDICAL PRESCRIPTION & CLINICAL GUIDANCE", 15, prescY);
+      prescY += 5;
 
-    doc.save(
-      `device_reading_${new Date(r.createdAt).toISOString().split("T")[0]}_${new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }).replace(/[:\s]/g, "")}.pdf`
-    );
+      // Card Container
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(241, 245, 249);
+      doc.roundedRect(15, prescY, 180, 40, 1.5, 1.5, "FD");
+
+      // Amber Rx Side panel
+      doc.setFillColor(254, 243, 199);
+      doc.rect(15, prescY, 12, 40, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(217, 119, 6); // amber-600 Rx
+      doc.text("Rx", 18, prescY + 23);
+
+      // Medicines List column
+      if (latestPrescription.prescription) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(13, 148, 136);
+        doc.text("Medicines & Dosage Instructions:", 32, prescY + 6);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        const medLines = doc.splitTextToSize(latestPrescription.prescription, 75);
+        doc.text(medLines, 32, prescY + 11);
+      } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text("No specific medications prescribed.", 32, prescY + 6);
+      }
+
+      // Clinical Notes Column
+      if (latestPrescription.notes) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(13, 148, 136);
+        doc.text("Doctor Advice & Lifestyle Notes:", 112, prescY + 6);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        const noteLines = doc.splitTextToSize(latestPrescription.notes, 78);
+        doc.text(noteLines, 112, prescY + 11);
+      } else {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text("No specific clinical advice recorded.", 112, prescY + 6);
+      }
+
+      prescY += 48;
+    }
+
+    // ── Clinical Notes & Reference Disclaimers ──
+    if (prescY > 235) {
+      doc.addPage();
+      prescY = 20;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Clinical Notes & Telemetry Reference Disclaimers:", 15, prescY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("• Blood pressure estimations are derived from heart rate telemetry and are reference values.", 15, prescY + 5);
+    doc.text("• Body temperature readings represent skin-surface telemetry calculated via sensor calibrations.", 15, prescY + 9);
+    doc.text("• This report is for remote health monitoring reference only and does not replace medical-grade laboratory diagnostics.", 15, prescY + 13);
+
+    // ── Page Footers ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Clinical Telemetry Assessment — Page ${i} of ${pageCount}`, 15, doc.internal.pageSize.height - 8);
+      doc.text("Confidential • MediCare HMS", 195, doc.internal.pageSize.height - 8, { align: "right" });
+    }
+
+    doc.save(`device_reading_${new Date(r.createdAt).toISOString().split("T")[0]}_${new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }).replace(/[:\s]/g, "")}.pdf`);
     toast.success("Report downloaded!");
   };
 

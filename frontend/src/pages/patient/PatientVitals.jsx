@@ -28,98 +28,198 @@ const PatientVitals = () => {
     const doc = new jsPDF();
     const user = JSON.parse(localStorage.getItem("userInfo") || "{}");
 
-    // Header with logo
-    doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 210, 50, "F");
-    
-    // Add logo from public folder
+    // ── Elegant Clinical Header ──
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Blue)
+    doc.rect(0, 0, 210, 28, "F");
+    doc.setFillColor(13, 148, 136); // teal-600 (Teal Accent Line)
+    doc.rect(0, 28, 210, 3, "F");
+
+    // Add Logo
     try {
       const logoImg = new Image();
       logoImg.src = "/logo.jpeg";
-      doc.addImage(logoImg, "JPEG", 15, 8, 15, 15);
+      doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
     } catch (e) {
-      // Logo not available, continue without it
+      // Continue without logo
     }
-    
-    doc.setTextColor(255);
-    doc.setFontSize(20);
-    doc.text("MediCare HMS", 35, 18);
-    doc.setFontSize(10);
-    doc.text("Patient Vitals Report", 35, 28);
-    
-    // Patient Information Section
-    doc.setTextColor(80);
-    doc.setFontSize(9);
-    doc.text("PATIENT INFORMATION", 15, 58);
-    doc.setFillColor(245, 245, 245);
-    doc.rect(15, 60, 180, 45, "F");
-    
-    doc.setTextColor(60);
-    doc.setFontSize(9);
-    const patientInfo = [
-      `Name: ${user?.name || "N/A"}`,
-      `Age: ${user?.age || "N/A"} | Height: ${user?.height || "N/A"} | Weight: ${user?.weight || "N/A"}`,
-      `Disease/Condition: ${user?.disease || "Not specified"}`,
-      `Email: ${user?.email || "N/A"}`,
-      `Phone: ${user?.contactNo || "N/A"}`,
-      `Date: ${new Date(vital.createdAt).toLocaleDateString("en-US", {
-        year: "numeric", month: "long", day: "numeric",
-      })}`,
-      `Doctor: Dr. ${vital.doctorInfo?.name || "Unknown"}${vital.doctorInfo?.specialization ? ` (${vital.doctorInfo.specialization})` : ""}`,
-    ];
-    
-    let yPos = 65;
-    patientInfo.forEach((info) => {
-      doc.text(info, 18, yPos);
-      yPos += 6;
-    });
 
-    // Vitals table
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("MEDICARE HEALTHCARE — OFFICIAL VITAL SIGNS RECORD", 38, 12);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(204, 251, 241); // light teal text
+    doc.text("Certified Clinical Diagnostic Assessment and Treatment Log.", 38, 20);
+
+    // Generation Dates on Header Right
+    const recDate = new Date(vital.createdAt).toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric"
+    });
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Record Date: ${recDate}`, 195, 12, { align: "right" });
+    doc.text("Status: Finalized", 195, 20, { align: "right" });
+
+    // ── Patient Info Card ──
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.roundedRect(15, 36, 180, 28, 2, 2, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(13, 148, 136); // teal-600
+    doc.text("PATIENT CLINICAL METADATA", 20, 42);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("Name:", 20, 48);
+    doc.text("Age / Contact:", 20, 53);
+    doc.text("Email:", 20, 58);
+
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.setFont("helvetica", "bold");
+    doc.text(user?.name || "N/A", 31, 48);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${user?.age || "N/A"} yrs  |  ${user?.contactNo || "N/A"}`, 41, 53);
+    doc.text(user?.email || "N/A", 30, 58);
+
+    doc.setTextColor(100, 116, 139);
+    doc.text("Height / Weight:", 110, 48);
+    doc.text("Condition:", 110, 53);
+    doc.text("Attending Dr:", 110, 58);
+
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${user?.height ? user.height + " cm" : "—"}  /  ${user?.weight ? user.weight + " kg" : "—"}`, 133, 48);
+    doc.setFont("helvetica", "bold");
+    doc.text(user?.disease || "Not specified", 126, 53);
+    doc.text(`Dr. ${vital.doctorInfo?.name || "Practitioner"}`, 129, 58);
+
+    // ── Upgraded Vitals AutoTable with Standards ──
     autoTable(doc, {
-      startY: 107,
-      head: [["Vitals Parameter", "Value", "Unit", "Status"]],
+      startY: 70,
+      head: [["Vitals Parameter", "Observed Value", "Standard Reference Range", "Assessment"]],
       body: [
-        ["Systolic BP", vital.systolic, "mmHg", vital.systolic < 140 ? "Normal" : "High"],
-        ["Diastolic BP", vital.diastolic, "mmHg", vital.diastolic < 90 ? "Normal" : "High"],
-        ["Pulse Rate", vital.pulse, "bpm", vital.pulse >= 60 && vital.pulse <= 100 ? "Normal" : "Review"],
-        ["Oxygen (SpO₂)", vital.oxygen, "%", vital.oxygen >= 95 ? "Normal" : "Low"],
-        ["Temperature", vital.temperature, "°F", vital.temperature >= 97 && vital.temperature <= 99.5 ? "Normal" : "Review"],
+        ["Systolic Blood Pressure", `${vital.systolic} mmHg`, "< 140 mmHg", vital.systolic < 140 ? "Normal" : "High"],
+        ["Diastolic Blood Pressure", `${vital.diastolic} mmHg`, "< 90 mmHg", vital.diastolic < 90 ? "Normal" : "High"],
+        ["Heart / Pulse Rate", `${vital.pulse} bpm`, "60 - 100 bpm", vital.pulse >= 60 && vital.pulse <= 100 ? "Normal" : "Review"],
+        ["Blood Oxygen (SpO₂)", `${vital.oxygen}%`, "95% - 100%", vital.oxygen >= 95 ? "Normal" : "Low"],
+        ["Body Temperature", `${vital.temperature}°F`, "97.0°F - 99.5°F", vital.temperature >= 97 && vital.temperature <= 99.5 ? "Normal" : "Review"],
       ],
       theme: "striped",
-      headStyles: { fillColor: [13, 148, 136] },
-      styles: { fontSize: 11 },
+      headStyles: { fillColor: [15, 23, 42], fontSize: 8.5, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 8, cellPadding: 3, halign: "center" },
+      columnStyles: {
+        0: { halign: "left", fontStyle: "bold" },
+        1: { halign: "center" },
+        3: { fontStyle: "bold" },
+      },
+      didParseCell: (data) => {
+        if (data.column.index === 3 && data.section === "body") {
+          const val = data.cell.raw;
+          if (val === "Normal") data.cell.styles.textColor = [22, 163, 74];
+          else data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
     });
 
-    // Prescription section
-    const tableEnd = doc.lastAutoTable.finalY + 15;
+    // ── Beautiful RX Prescription Pad ──
+    let prescY = doc.lastAutoTable.finalY + 8;
+    if (prescY > 175) {
+      doc.addPage();
+      prescY = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text("PRESCRIBED TREATMENT & CLINICAL GUIDANCE", 15, prescY);
+    prescY += 5;
+
+    // Card Container
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(241, 245, 249);
+    doc.roundedRect(15, prescY, 180, 45, 1.5, 1.5, "FD");
+
+    // Amber Rx Side panel
+    doc.setFillColor(254, 243, 199);
+    doc.rect(15, prescY, 12, 45, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(217, 119, 6); // amber-600 Rx
+    doc.text("Rx", 18, prescY + 25);
+
+    // Medicines List column
     if (vital.prescription) {
-      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
       doc.setTextColor(13, 148, 136);
-      doc.text("MEDICINES & PRESCRIPTION:", 15, tableEnd);
-      doc.setTextColor(60);
-      doc.setFontSize(10);
-      const lines = doc.splitTextToSize(vital.prescription, 180);
-      doc.text(lines, 15, tableEnd + 8);
+      doc.text("Medicines & Dosage Instructions:", 32, prescY + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      const medLines = doc.splitTextToSize(vital.prescription, 75);
+      doc.text(medLines, 32, prescY + 12);
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("No specific medications prescribed.", 32, prescY + 7);
     }
 
-    // Notes section
+    // Clinical Notes Column
     if (vital.notes) {
-      const notesY = vital.prescription
-        ? tableEnd + 8 + doc.splitTextToSize(vital.prescription, 180).length * 5 + 10
-        : tableEnd;
-      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
       doc.setTextColor(13, 148, 136);
-      doc.text("DOCTOR NOTES:", 15, notesY);
-      doc.setTextColor(60);
-      doc.setFontSize(10);
-      const noteLines = doc.splitTextToSize(vital.notes, 180);
-      doc.text(noteLines, 15, notesY + 8);
+      doc.text("Doctor Advice & Lifestyle Notes:", 112, prescY + 7);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      const noteLines = doc.splitTextToSize(vital.notes, 78);
+      doc.text(noteLines, 112, prescY + 12);
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184);
+      doc.text("No specific clinical advice recorded.", 112, prescY + 7);
     }
 
-    // Footer
+    prescY += 53;
+
+    // ── Signature Section ──
+    if (prescY > 230) {
+      doc.addPage();
+      prescY = 20;
+    }
+
+    const sigY = 250;
+    doc.setDrawColor(148, 163, 184);
+    doc.line(125, sigY, 195, sigY);
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text("This is a system-generated report from MediCare HMS", 15, 285);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Attending Physician Signature", 125, sigY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Dr. ${vital.doctorInfo?.name || "Practitioner"}`, 125, sigY + 8);
+    if (vital.doctorInfo?.specialization) {
+      doc.text(vital.doctorInfo.specialization, 125, sigY + 11);
+    }
+    doc.setFont("helvetica", "italic");
+    doc.text("Electronic Clinical Validation", 125, sigY + 14);
+
+    // ── Page Footers ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text(`Clinical Health Record — Page ${i} of ${pageCount}`, 15, doc.internal.pageSize.height - 8);
+      doc.text("Confidential • MediCare HMS", 195, doc.internal.pageSize.height - 8, { align: "right" });
+    }
 
     doc.save(`vitals_report_${new Date(vital.createdAt).toISOString().split("T")[0]}.pdf`);
     toast.success("Report downloaded!");
