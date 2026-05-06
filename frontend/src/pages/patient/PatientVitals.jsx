@@ -3,8 +3,8 @@ import { getPatientVitals } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
 import { FiHeart, FiThermometer, FiWind, FiDownload } from "react-icons/fi";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 
 const PatientVitals = () => {
   const [vitals, setVitals] = useState([]);
@@ -26,30 +26,57 @@ const PatientVitals = () => {
 
   const downloadReport = (vital) => {
     const doc = new jsPDF();
+    const user = JSON.parse(localStorage.getItem("userInfo") || "{}");
 
-    // Header
+    // Header with logo
     doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 210, 40, "F");
+    doc.rect(0, 0, 210, 50, "F");
+    
+    // Add logo from public folder
+    try {
+      const logoImg = new Image();
+      logoImg.src = "/logo.jpeg";
+      doc.addImage(logoImg, "JPEG", 15, 8, 15, 15);
+    } catch (e) {
+      // Logo not available, continue without it
+    }
+    
     doc.setTextColor(255);
     doc.setFontSize(20);
-    doc.text("MediCare HMS", 15, 18);
+    doc.text("MediCare HMS", 35, 18);
     doc.setFontSize(10);
-    doc.text("Patient Vitals Report", 15, 28);
-    doc.text(
+    doc.text("Patient Vitals Report", 35, 28);
+    
+    // Patient Information Section
+    doc.setTextColor(80);
+    doc.setFontSize(9);
+    doc.text("PATIENT INFORMATION", 15, 58);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(15, 60, 180, 45, "F");
+    
+    doc.setTextColor(60);
+    doc.setFontSize(9);
+    const patientInfo = [
+      `Name: ${user?.name || "N/A"}`,
+      `Age: ${user?.age || "N/A"} | Height: ${user?.height || "N/A"} | Weight: ${user?.weight || "N/A"}`,
+      `Disease/Condition: ${user?.disease || "Not specified"}`,
+      `Email: ${user?.email || "N/A"}`,
+      `Phone: ${user?.contactNo || "N/A"}`,
       `Date: ${new Date(vital.createdAt).toLocaleDateString("en-US", {
         year: "numeric", month: "long", day: "numeric",
       })}`,
-      15, 35
-    );
-
-    // Doctor info
-    doc.setTextColor(80);
-    doc.setFontSize(10);
-    doc.text(`Doctor: Dr. ${vital.doctorInfo?.name || "Unknown"}`, 130, 28);
+      `Doctor: Dr. ${vital.doctorInfo?.name || "Unknown"}${vital.doctorInfo?.specialization ? ` (${vital.doctorInfo.specialization})` : ""}`,
+    ];
+    
+    let yPos = 65;
+    patientInfo.forEach((info) => {
+      doc.text(info, 18, yPos);
+      yPos += 6;
+    });
 
     // Vitals table
-    doc.autoTable({
-      startY: 50,
+    autoTable(doc, {
+      startY: 107,
       head: [["Vitals Parameter", "Value", "Unit", "Status"]],
       body: [
         ["Systolic BP", vital.systolic, "mmHg", vital.systolic < 140 ? "Normal" : "High"],
@@ -63,26 +90,26 @@ const PatientVitals = () => {
       styles: { fontSize: 11 },
     });
 
-    // Prescription
+    // Prescription section
     const tableEnd = doc.lastAutoTable.finalY + 15;
     if (vital.prescription) {
       doc.setFontSize(12);
       doc.setTextColor(13, 148, 136);
-      doc.text("Prescription:", 15, tableEnd);
+      doc.text("MEDICINES & PRESCRIPTION:", 15, tableEnd);
       doc.setTextColor(60);
       doc.setFontSize(10);
       const lines = doc.splitTextToSize(vital.prescription, 180);
       doc.text(lines, 15, tableEnd + 8);
     }
 
-    // Notes
+    // Notes section
     if (vital.notes) {
       const notesY = vital.prescription
         ? tableEnd + 8 + doc.splitTextToSize(vital.prescription, 180).length * 5 + 10
         : tableEnd;
       doc.setFontSize(12);
       doc.setTextColor(13, 148, 136);
-      doc.text("Doctor Notes:", 15, notesY);
+      doc.text("DOCTOR NOTES:", 15, notesY);
       doc.setTextColor(60);
       doc.setFontSize(10);
       const noteLines = doc.splitTextToSize(vital.notes, 180);

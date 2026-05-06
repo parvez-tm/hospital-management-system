@@ -39,6 +39,7 @@ export const getDoctorStats = () => API.get("/doctor/stats");
 export const getDoctorPatients = () => API.get("/doctor/patients");
 export const getDoctorPatientDetail = (id) => API.get(`/doctor/patients/${id}`);
 export const addPatientVitals = (data) => API.post("/doctor/vitals", data);
+export const updateDoctorPatient = (id, data) => API.put(`/doctor/patients/${id}`, data);
 
 // Patient
 export const getPatientProfile = () => API.get("/patient/profile");

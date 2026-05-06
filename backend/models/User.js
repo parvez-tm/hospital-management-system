@@ -47,6 +47,10 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    disease: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     // Doctor-specific fields
     specialization: {
       type: DataTypes.STRING,

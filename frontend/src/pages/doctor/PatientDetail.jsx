@@ -2,12 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   getDoctorPatientDetail,
-  addPatientVitals,
   startDeviceSession,
   stopDeviceSession,
   getActiveSession,
   getLatestReading,
   getDeviceReadings,
+  updateDoctorPatient,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
@@ -23,30 +23,28 @@ import {
   FiStopCircle,
   FiDownload,
 } from "react-icons/fi";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 
 const PatientDetail = () => {
   const { id } = useParams();
   const [patient, setPatient] = useState(null);
-  const [vitals, setVitals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    systolic: "",
-    diastolic: "",
-    pulse: "",
-    oxygen: "",
-    temperature: "",
-    prescription: "",
-    notes: "",
+  const [showEditPatientInfo, setShowEditPatientInfo] = useState(false);
+  const [editingPatientInfo, setEditingPatientInfo] = useState(false);
+  const [editPatientForm, setEditPatientForm] = useState({
+    age: "",
+    height: "",
+    weight: "",
+    disease: "",
+    contactNo: "",
   });
 
   // ── Live monitoring state ──
   const [activeSession, setActiveSession] = useState(null);
   const [liveReading, setLiveReading] = useState(null);
   const [liveReadings, setLiveReadings] = useState([]);
+  const [allReadings, setAllReadings] = useState([]);
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [isStoppingSession, setIsStoppingSession] = useState(false);
   const pollIntervalRef = useRef(null);
@@ -55,11 +53,27 @@ const PatientDetail = () => {
     try {
       const { data } = await getDoctorPatientDetail(id);
       setPatient(data.patient);
-      setVitals(data.vitals);
+      // Initialize edit form with patient data
+      setEditPatientForm({
+        age: data.patient.age || "",
+        height: data.patient.height || "",
+        weight: data.patient.weight || "",
+        disease: data.patient.disease || "",
+        contactNo: data.patient.contactNo || "",
+      });
     } catch {
       toast.error("Failed to load patient details");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllReadings = async () => {
+    try {
+      const { data: readings } = await getDeviceReadings(id, 100);
+      if (readings) setAllReadings(readings);
+    } catch {
+      // silent
     }
   };
 
@@ -80,6 +94,7 @@ const PatientDetail = () => {
   useEffect(() => {
     fetchData();
     checkActiveSession();
+    fetchAllReadings();
   }, [id, checkActiveSession]);
 
   // Poll for live readings when session is active
@@ -108,6 +123,7 @@ const PatientDetail = () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       setLiveReading(null);
       setLiveReadings([]);
+      fetchAllReadings();
     }
   }, [activeSession, id]);
 
@@ -143,35 +159,18 @@ const PatientDetail = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleUpdatePatientInfo = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
+    setEditingPatientInfo(true);
     try {
-      await addPatientVitals({
-        patientId: id,
-        ...form,
-        systolic: Number(form.systolic),
-        diastolic: Number(form.diastolic),
-        pulse: Number(form.pulse),
-        oxygen: Number(form.oxygen),
-        temperature: Number(form.temperature),
-      });
-      toast.success("Vitals added successfully");
-      setShowForm(false);
-      setForm({
-        systolic: "",
-        diastolic: "",
-        pulse: "",
-        oxygen: "",
-        temperature: "",
-        prescription: "",
-        notes: "",
-      });
-      fetchData();
+      const { data } = await updateDoctorPatient(id, editPatientForm);
+      setPatient(data);
+      toast.success("Patient information updated successfully");
+      setShowEditPatientInfo(false);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to add vitals");
+      toast.error(err.response?.data?.message || "Failed to update patient info");
     } finally {
-      setSubmitting(false);
+      setEditingPatientInfo(false);
     }
   };
 
@@ -189,28 +188,55 @@ const PatientDetail = () => {
 
   // ── Download device readings PDF ──
   const downloadDeviceReport = () => {
-    if (liveReadings.length === 0) {
+    const reportReadings = liveReadings.length > 0 ? liveReadings : allReadings;
+    if (reportReadings.length === 0) {
       toast.warn("No device readings to download");
       return;
     }
     const doc = new jsPDF({ orientation: "landscape" });
 
+    // Header with logo
     doc.setFillColor(13, 148, 136);
-    doc.rect(0, 0, 297, 35, "F");
+    doc.rect(0, 0, 297, 50, "F");
+    
+    // Add logo from public folder
+    try {
+      const logoImg = new Image();
+      logoImg.src = "/logo.jpeg";
+      doc.addImage(logoImg, "JPEG", 15, 10, 15, 15);
+    } catch (e) {
+      // Logo not available, continue without it
+    }
+    
     doc.setTextColor(255);
     doc.setFontSize(18);
-    doc.text("MediCare HMS", 15, 15);
-    doc.setFontSize(10);
-    doc.text(`Device Readings — ${patient?.name || "Patient"}`, 15, 23);
-    doc.text(
+    doc.text("MediCare HMS - Device Health Readings Report", 35, 18);
+    
+    // Patient Information Section
+    doc.setTextColor(80);
+    doc.setFontSize(8);
+    doc.text("PATIENT INFORMATION", 15, 58);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(15, 60, 267, 30, "F");
+    
+    doc.setTextColor(60);
+    doc.setFontSize(8);
+    const patientInfo = [
+      `Name: ${patient?.name || "N/A"} | Age: ${patient?.age || "N/A"} | Height: ${patient?.height || "N/A"} | Weight: ${patient?.weight || "N/A"}`,
+      `Disease/Condition: ${patient?.disease || "Not specified"}`,
+      `Email: ${patient?.email || "N/A"} | Phone: ${patient?.contactNo || "N/A"}`,
       `Generated: ${new Date().toLocaleDateString("en-US", {
         year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
-      })}`,
-      15, 30
-    );
-    doc.text(`Total Readings: ${liveReadings.length}`, 200, 23);
+      })} | Total Readings: ${reportReadings.length}`,
+    ];
+    
+    let yPos = 65;
+    patientInfo.forEach((info) => {
+      doc.text(info, 18, yPos);
+      yPos += 6;
+    });
 
-    const tableData = [...liveReadings].reverse().map((r) => {
+    const tableData = [...reportReadings].reverse().map((r) => {
       const status = r.spo2 >= 95 && r.pulse_rate >= 50 && r.pulse_rate <= 110 && r.bp_systolic < 140 ? "Normal" : "Review";
       return [
         new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -225,8 +251,8 @@ const PatientDetail = () => {
       ];
     });
 
-    doc.autoTable({
-      startY: 42,
+    autoTable(doc, {
+      startY: 96,
       head: [["Date", "Time", "HR (bpm)", "SpO₂", "Body Temp", "BP", "Room Temp", "Humidity", "Status"]],
       body: tableData,
       theme: "striped",
@@ -295,16 +321,16 @@ const PatientDetail = () => {
             </button>
           )}
           <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-medium text-sm hover:from-teal-700 hover:to-cyan-700 shadow-lg shadow-teal-200 transition-all"
+            onClick={() => setShowEditPatientInfo(!showEditPatientInfo)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-medium text-sm hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-200 transition-all"
           >
-            {showForm ? (
+            {showEditPatientInfo ? (
               <>
                 <FiX /> Cancel
               </>
             ) : (
               <>
-                <FiPlus /> Add Vitals
+                <FiPlus /> Edit Info
               </>
             )}
           </button>
@@ -312,7 +338,7 @@ const PatientDetail = () => {
       </div>
 
       {/* Patient Info Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-100 p-4 text-center">
           <p className="text-xs text-gray-400 mb-1">Age</p>
           <p className="text-xl font-bold text-gray-800">
@@ -332,6 +358,12 @@ const PatientDetail = () => {
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4 text-center">
+          <p className="text-xs text-gray-400 mb-1">Disease</p>
+          <p className="text-sm font-bold text-gray-800">
+            {patient.disease || "Not specified"}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 text-center">
           <p className="text-xs text-gray-400 mb-1">Contact</p>
           <p className="text-sm font-bold text-gray-800">
             {patient.contactNo}
@@ -340,23 +372,37 @@ const PatientDetail = () => {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* LIVE MONITORING PANEL — only visible when session is active       */}
+      {/* DEVICE READINGS PANEL                                             */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {activeSession && (
+      {(activeSession || allReadings.length > 0) && (
         <div className="mb-6">
           {/* Status bar */}
           <div className="flex items-center gap-3 mb-4">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-            <h3 className="text-lg font-semibold text-gray-800">
-              Live Monitoring
-            </h3>
-            <span className="text-xs text-gray-400">
-              Device: {activeSession.deviceId || "ESP32-001"} • Session started{" "}
-              {new Date(activeSession.startedAt).toLocaleTimeString()}
-            </span>
+            {activeSession ? (
+              <>
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Live Monitoring
+                </h3>
+                <span className="text-xs text-gray-400">
+                  Device: {activeSession.deviceId || "ESP32-001"} • Session started{" "}
+                  {new Date(activeSession.startedAt).toLocaleTimeString()}
+                </span>
+              </>
+            ) : (
+              <>
+                <FiRadio className="text-gray-500" size={18} />
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Device Readings History
+                </h3>
+                <span className="text-xs text-gray-400">
+                  {allReadings.length} recorded readings
+                </span>
+              </>
+            )}
           </div>
 
           {liveReading ? (
@@ -450,292 +496,154 @@ const PatientDetail = () => {
             </div>
           )}
 
-          {liveReading && (
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">
-                Last updated: {timeAgo(liveReading.createdAt)}
-              </p>
-              <button
-                onClick={downloadDeviceReport}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors"
-              >
-                <FiDownload size={14} /> Download Report
-              </button>
-            </div>
-          )}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">
+              {liveReading ? `Last updated: ${timeAgo(liveReading.createdAt)}` : `${allReadings.length} total readings`}
+            </p>
+            <button
+              onClick={downloadDeviceReport}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors"
+            >
+              <FiDownload size={14} /> Download Report
+            </button>
+          </div>
 
-          {/* Recent device readings table */}
-          {liveReadings.length > 0 && (
-            <div className="mt-4 bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                <h4 className="text-sm font-semibold text-gray-700">
-                  Recent Device Readings ({liveReadings.length})
-                </h4>
-              </div>
-              <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-500 text-xs sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Time</th>
-                      <th className="px-3 py-2 text-center">HR</th>
-                      <th className="px-3 py-2 text-center">SpO₂</th>
-                      <th className="px-3 py-2 text-center">Body °C</th>
-                      <th className="px-3 py-2 text-center">BP</th>
-                      <th className="px-3 py-2 text-center">Room °C</th>
-                      <th className="px-3 py-2 text-center">Humidity</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {[...liveReadings].reverse().map((r) => (
-                      <tr
-                        key={r.id}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                          {new Date(r.createdAt).toLocaleTimeString()}
-                        </td>
-                        <td className="px-3 py-2 text-center font-medium">
-                          {r.pulse_rate}
-                        </td>
-                        <td className="px-3 py-2 text-center font-medium">
-                          {r.spo2}%
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {r.body_temp?.toFixed(1)}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {r.bp_systolic}/{r.bp_diastolic}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {r.env_temp?.toFixed(1)}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {r.humidity?.toFixed(1)}%
-                        </td>
+          {/* Device readings table — live during session, historical otherwise */}
+          {(() => {
+            const displayReadings = liveReadings.length > 0 ? liveReadings : allReadings;
+            return displayReadings.length > 0 ? (
+              <div className="mt-4 bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <h4 className="text-sm font-semibold text-gray-700">
+                    {liveReadings.length > 0 ? `Live Readings (${displayReadings.length})` : `All Device Readings (${displayReadings.length})`}
+                  </h4>
+                </div>
+                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-500 text-xs sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Date &amp; Time</th>
+                        <th className="px-3 py-2 text-center">HR</th>
+                        <th className="px-3 py-2 text-center">SpO₂</th>
+                        <th className="px-3 py-2 text-center">Body °C</th>
+                        <th className="px-3 py-2 text-center">BP</th>
+                        <th className="px-3 py-2 text-center">Room °C</th>
+                        <th className="px-3 py-2 text-center">Humidity</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {[...displayReadings].reverse().map((r) => (
+                        <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                            {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                            {new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          </td>
+                          <td className="px-3 py-2 text-center font-medium">{r.pulse_rate}</td>
+                          <td className="px-3 py-2 text-center font-medium">{r.spo2}%</td>
+                          <td className="px-3 py-2 text-center">{r.body_temp?.toFixed(1)}</td>
+                          <td className="px-3 py-2 text-center">{r.bp_systolic}/{r.bp_diastolic}</td>
+                          <td className="px-3 py-2 text-center">{r.env_temp?.toFixed(1)}</td>
+                          <td className="px-3 py-2 text-center">{r.humidity?.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            ) : null;
+          })()}
         </div>
       )}
 
-      {/* Add Vitals Form */}
-      {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Add New Vitals Record
-          </h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {/* Edit Patient Information Form */}
+      {showEditPatientInfo && (
+        <div className="mb-6 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Edit Patient Information</h3>
+          <form onSubmit={handleUpdatePatientInfo} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Systolic (mmHg)
+                  Age
                 </label>
                 <input
                   type="number"
-                  value={form.systolic}
+                  value={editPatientForm.age}
                   onChange={(e) =>
-                    setForm({ ...form, systolic: e.target.value })
+                    setEditPatientForm({ ...editPatientForm, age: e.target.value })
                   }
-                  required
-                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  placeholder="120"
+                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  placeholder="Age"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Diastolic (mmHg)
+                  Height (cm)
                 </label>
                 <input
-                  type="number"
-                  value={form.diastolic}
+                  type="text"
+                  value={editPatientForm.height}
                   onChange={(e) =>
-                    setForm({ ...form, diastolic: e.target.value })
+                    setEditPatientForm({ ...editPatientForm, height: e.target.value })
                   }
-                  required
-                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  placeholder="80"
+                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  placeholder="Height"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Pulse (bpm)
+                  Weight (kg)
                 </label>
                 <input
-                  type="number"
-                  value={form.pulse}
-                  onChange={(e) => setForm({ ...form, pulse: e.target.value })}
-                  required
-                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  placeholder="72"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Oxygen (%)
-                </label>
-                <input
-                  type="number"
-                  value={form.oxygen}
-                  onChange={(e) => setForm({ ...form, oxygen: e.target.value })}
-                  required
-                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  placeholder="98"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Temp (°F)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={form.temperature}
+                  type="text"
+                  value={editPatientForm.weight}
                   onChange={(e) =>
-                    setForm({ ...form, temperature: e.target.value })
+                    setEditPatientForm({ ...editPatientForm, weight: e.target.value })
                   }
-                  required
-                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                  placeholder="98.6"
+                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  placeholder="Weight"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Contact No
+                </label>
+                <input
+                  type="text"
+                  value={editPatientForm.contactNo}
+                  onChange={(e) =>
+                    setEditPatientForm({ ...editPatientForm, contactNo: e.target.value })
+                  }
+                  className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  placeholder="Contact No"
                 />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
-                Prescription
+                Disease/Condition
               </label>
               <textarea
-                value={form.prescription}
+                value={editPatientForm.disease}
                 onChange={(e) =>
-                  setForm({ ...form, prescription: e.target.value })
+                  setEditPatientForm({ ...editPatientForm, disease: e.target.value })
                 }
-                rows={3}
-                className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none"
-                placeholder="Medications, dosage, instructions..."
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
-                Notes
-              </label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 rows={2}
-                className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none"
-                placeholder="Additional observations..."
+                className="w-full py-2.5 px-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none"
+                placeholder="Disease/Condition..."
               />
             </div>
             <button
               type="submit"
-              disabled={submitting}
-              className="px-8 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white font-medium rounded-xl text-sm hover:from-teal-700 hover:to-cyan-700 shadow-lg shadow-teal-200 transition-all disabled:opacity-50"
+              disabled={editingPatientInfo}
+              className="px-8 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl text-sm hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-200 transition-all disabled:opacity-50"
             >
-              {submitting ? "Saving..." : "Save Vitals"}
+              {editingPatientInfo ? "Updating..." : "Update Patient Info"}
             </button>
           </form>
         </div>
       )}
 
-      {/* Vitals History */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Vitals History ({vitals.length} records)
-        </h3>
-        <div className="space-y-3">
-          {vitals.map((v) => (
-            <div
-              key={v.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-gray-400">
-                  {new Date(v.createdAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                <span className="text-xs text-gray-500">
-                  By: Dr. {v.doctorInfo?.name || "Unknown"}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-5 gap-3 mb-3">
-                <div className="text-center p-2 bg-red-50 rounded-lg">
-                  <FiHeart className="mx-auto text-red-500 mb-1" />
-                  <p className="text-xs text-gray-500">BP</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {v.systolic}/{v.diastolic}
-                  </p>
-                </div>
-                <div className="text-center p-2 bg-pink-50 rounded-lg">
-                  <FiHeart className="mx-auto text-pink-500 mb-1" />
-                  <p className="text-xs text-gray-500">Pulse</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {v.pulse} bpm
-                  </p>
-                </div>
-                <div className="text-center p-2 bg-blue-50 rounded-lg">
-                  <FiWind className="mx-auto text-blue-500 mb-1" />
-                  <p className="text-xs text-gray-500">O₂</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {v.oxygen}%
-                  </p>
-                </div>
-                <div className="text-center p-2 bg-orange-50 rounded-lg">
-                  <FiThermometer className="mx-auto text-orange-500 mb-1" />
-                  <p className="text-xs text-gray-500">Temp</p>
-                  <p className="text-sm font-bold text-gray-800">
-                    {v.temperature}°F
-                  </p>
-                </div>
-                <div className="text-center p-2 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Status</p>
-                  <p
-                    className={`text-xs font-bold ${v.oxygen >= 95 && v.systolic < 140 ? "text-green-600" : "text-orange-600"}`}
-                  >
-                    {v.oxygen >= 95 && v.systolic < 140 ? "Normal" : "Review"}
-                  </p>
-                </div>
-              </div>
-
-              {v.prescription && (
-                <div className="mt-3 p-3 bg-teal-50 rounded-lg">
-                  <p className="text-xs font-medium text-teal-700 mb-1">
-                    💊 Prescription
-                  </p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                    {v.prescription}
-                  </p>
-                </div>
-              )}
-              {v.notes && (
-                <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs font-medium text-gray-500 mb-1">
-                    📝 Notes
-                  </p>
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                    {v.notes}
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {vitals.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
-            <FiHeart className="text-4xl mx-auto mb-2 opacity-50" />
-            <p>No vitals records yet</p>
-          </div>
-        )}
-      </div>
     </div>
   );
 };

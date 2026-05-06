@@ -10,8 +10,8 @@ import {
   FiRadio,
   FiDownload,
 } from "react-icons/fi";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 
 const PatientDeviceReadings = () => {
   const [readings, setReadings] = useState([]);
@@ -105,7 +105,7 @@ const PatientDeviceReadings = () => {
       ];
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 42,
       head: [
         [
@@ -201,7 +201,7 @@ const PatientDeviceReadings = () => {
     const bpOk = r.bp_systolic < 140;
 
     // Vitals table
-    doc.autoTable({
+    autoTable(doc, {
       startY: 50,
       head: [["Parameter", "Value", "Unit", "Status"]],
       body: [

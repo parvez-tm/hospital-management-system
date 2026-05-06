@@ -123,6 +123,44 @@ router.post(
   }
 );
 
+// PUT /api/doctor/patients/:id - Update patient information (disease, etc.)
+router.put(
+  "/patients/:id",
+  protect,
+  authorize("doctor"),
+  async (req, res) => {
+    try {
+      const { age, height, weight, disease, contactNo } = req.body;
+      
+      const patient = await User.findOne({
+        where: {
+          id: req.params.id,
+          role: "patient",
+        },
+      });
+
+      if (!patient) {
+        return res
+          .status(404)
+          .json({ message: "Patient not found" });
+      }
+
+      await User.update(
+        { age, height, weight, disease, contactNo },
+        { where: { id: req.params.id } }
+      );
+
+      const updatedPatient = await User.findByPk(req.params.id, {
+        attributes: { exclude: ["password"] },
+      });
+
+      res.json(updatedPatient);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+);
+
 // GET /api/doctor/stats - Get doctor dashboard stats
 router.get(
   "/stats",

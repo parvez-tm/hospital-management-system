@@ -31,9 +31,9 @@ router.put(
   tenantIsolation,
   async (req, res) => {
     try {
-      const { name, contactNo, age, height, weight } = req.body;
+      const { name, contactNo, age, height, weight, disease } = req.body;
       await User.update(
-        { name, contactNo, age, height, weight },
+        { name, contactNo, age, height, weight, disease },
         { where: { id: req.user.id } }
       );
       const patient = await User.findByPk(req.user.id, {
