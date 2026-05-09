@@ -3,11 +3,12 @@ import {
   createAdminPatient,
   getAdminDoctors,
   getAdminPatients,
+  updateAdminPatient,
   deleteUser,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
-import { FiUser, FiTrash2, FiSearch, FiPlus, FiX } from "react-icons/fi";
+import { FiUser, FiTrash2, FiSearch, FiPlus, FiX, FiEdit2 } from "react-icons/fi";
 
 const emptyPatientForm = {
   name: "",
@@ -28,6 +29,7 @@ const AdminPatients = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyPatientForm);
 
@@ -57,9 +59,27 @@ const AdminPatients = () => {
   }, []);
 
   const openCreate = () => {
+    setEditingPatient(null);
     setForm({
       ...emptyPatientForm,
       assignedDoctor: doctors[0]?.id || "",
+    });
+    setShowModal(true);
+  };
+
+  const openEdit = (patient) => {
+    setEditingPatient(patient);
+    setForm({
+      ...emptyPatientForm,
+      name: patient.name || "",
+      email: patient.email || "",
+      username: patient.username || "",
+      contactNo: patient.contactNo || "",
+      age: patient.age || "",
+      height: patient.height || "",
+      weight: patient.weight || "",
+      disease: patient.disease || "",
+      assignedDoctor: patient.assignedDoctor || "",
     });
     setShowModal(true);
   };
@@ -68,20 +88,34 @@ const AdminPatients = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleCreatePatient = async (e) => {
+  const handleSubmitPatient = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await createAdminPatient({
-        ...form,
-        assignedDoctor: form.assignedDoctor || null,
-      });
-      toast.success("Patient account created");
+      if (editingPatient) {
+        await updateAdminPatient(editingPatient.id, {
+          name: form.name,
+          contactNo: form.contactNo,
+          age: form.age,
+          height: form.height,
+          weight: form.weight,
+          disease: form.disease,
+          assignedDoctor: form.assignedDoctor || null,
+        });
+        toast.success("Patient updated");
+      } else {
+        await createAdminPatient({
+          ...form,
+          assignedDoctor: form.assignedDoctor || null,
+        });
+        toast.success("Patient account created");
+      }
       setShowModal(false);
+      setEditingPatient(null);
       setForm(emptyPatientForm);
       fetchPatients();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to create patient");
+      toast.error(err.response?.data?.message || "Failed to save patient");
     } finally {
       setSaving(false);
     }
@@ -185,6 +219,13 @@ const AdminPatients = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button
+                      onClick={() => openEdit(pat)}
+                      className="text-teal-600 hover:text-teal-800 hover:bg-teal-50 p-2 rounded-lg transition-colors"
+                      title="Edit patient"
+                    >
+                      <FiEdit2 />
+                    </button>
+                    <button
                       onClick={() => handleDelete(pat.id, pat.name)}
                       className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
                       title="Remove patient"
@@ -209,19 +250,21 @@ const AdminPatients = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-2xl overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-800">Add Patient</h2>
+              <h2 className="text-lg font-bold text-gray-800">{editingPatient ? "Edit Patient" : "Add Patient"}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-700">
                 <FiX size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreatePatient} className="p-6 space-y-4">
+            <form onSubmit={handleSubmitPatient} className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input name="name" value={form.name} onChange={handleChange} required placeholder="Full name" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                <input name="username" value={form.username} onChange={handleChange} required placeholder="Username" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                <input name="email" type="email" value={form.email} onChange={handleChange} required placeholder="Email" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="username" value={form.username} onChange={handleChange} required disabled={!!editingPatient} placeholder="Username" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-500" />
+                <input name="email" type="email" value={form.email} onChange={handleChange} required disabled={!!editingPatient} placeholder="Email" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm disabled:bg-gray-100 disabled:text-gray-500" />
                 <input name="contactNo" value={form.contactNo} onChange={handleChange} required placeholder="Contact number" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
-                <input name="password" type="password" value={form.password} onChange={handleChange} required placeholder="Temporary password" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                {!editingPatient && (
+                  <input name="password" type="password" value={form.password} onChange={handleChange} required placeholder="Temporary password" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                )}
                 <select name="assignedDoctor" value={form.assignedDoctor} onChange={handleChange} className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm">
                   <option value="">No assigned doctor</option>
                   {doctors.map((doctor) => (
@@ -241,7 +284,7 @@ const AdminPatients = () => {
                   Cancel
                 </button>
                 <button disabled={saving} type="submit" className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50">
-                  {saving ? "Creating..." : "Create Patient"}
+                  {saving ? "Saving..." : editingPatient ? "Save Patient" : "Create Patient"}
                 </button>
               </div>
             </form>

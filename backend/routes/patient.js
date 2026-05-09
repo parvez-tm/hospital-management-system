@@ -1,5 +1,5 @@
 const express = require("express");
-const { fn, col } = require("sequelize");
+const { fn, col, Op } = require("sequelize");
 const { User, PatientVitals, HealthReading } = require("../models");
 const { protect, authorize, tenantIsolation } = require("../middleware/auth");
 
@@ -14,7 +14,14 @@ router.get(
   async (req, res) => {
     try {
       const patient = await User.findByPk(req.user.id, {
-        attributes: { exclude: ["password"] }
+        attributes: { exclude: ["password"] },
+        include: [
+          {
+            model: User,
+            as: "doctor",
+            attributes: ["id", "name", "specialization"],
+          },
+        ],
       });
       res.json(patient);
     } catch (error) {
@@ -38,6 +45,13 @@ router.put(
       );
       const patient = await User.findByPk(req.user.id, {
         attributes: { exclude: ["password"] },
+        include: [
+          {
+            model: User,
+            as: "doctor",
+            attributes: ["id", "name", "specialization"],
+          },
+        ],
       });
       res.json(patient);
     } catch (error) {
@@ -122,6 +136,10 @@ router.get(
       const latestVitals = await PatientVitals.findOne({
         where: {
           patientId: req.user.id,
+          [Op.or]: [
+            { reviewStatus: "reviewed" },
+            { submittedBy: "doctor" },
+          ],
         },
         order: [["createdAt", "DESC"]],
         include: [
@@ -244,16 +262,30 @@ router.get(
   }
 );
 
-// GET /api/patient/doctors - Get all doctors in the hospital
+// GET /api/patient/doctors - Get assigned doctor first, fallback to all doctors
 router.get(
   "/doctors",
   protect,
   authorize("patient"),
   async (req, res) => {
     try {
+      const patient = await User.findByPk(req.user.id, {
+        attributes: ["assignedDoctor"],
+      });
+
+      if (patient?.assignedDoctor) {
+        const assignedDoctor = await User.findOne({
+          where: { id: patient.assignedDoctor, role: "doctor" },
+          attributes: ["id", "name", "specialization"],
+        });
+
+        return res.json(assignedDoctor ? [assignedDoctor] : []);
+      }
+
       const doctors = await User.findAll({
         where: { role: "doctor" },
         attributes: ["id", "name", "specialization"],
+        order: [["name", "ASC"]],
       });
       res.json(doctors);
     } catch (error) {
@@ -269,7 +301,7 @@ router.post(
   authorize("patient"),
   async (req, res) => {
     try {
-      const {
+      let {
         systolic,
         diastolic,
         pulse,
@@ -278,6 +310,40 @@ router.post(
         notes,
         doctorId,
       } = req.body;
+      const patient = await User.findByPk(req.user.id, {
+        attributes: ["assignedDoctor"],
+      });
+
+      doctorId = doctorId || patient?.assignedDoctor;
+
+      if (!doctorId) {
+        return res.status(400).json({ message: "Please select a doctor for review" });
+      }
+
+      if (patient?.assignedDoctor && String(patient.assignedDoctor) !== String(doctorId)) {
+        return res.status(403).json({ message: "You can only submit review requests to your assigned doctor" });
+      }
+
+      const doctor = await User.findOne({
+        where: { id: doctorId, role: "doctor" },
+      });
+
+      if (!doctor) {
+        return res.status(404).json({ message: "Doctor not found" });
+      }
+
+      const existingPending = await PatientVitals.findOne({
+        where: {
+          patientId: req.user.id,
+          doctorId,
+          reviewStatus: "pending",
+        },
+        order: [["createdAt", "DESC"]],
+      });
+
+      if (existingPending) {
+        return res.status(409).json({ message: "You already have a pending review request with this doctor" });
+      }
 
       const vitals = await PatientVitals.create({
         patientId: req.user.id,
@@ -288,7 +354,10 @@ router.post(
         oxygen,
         temperature,
         prescription: "", // Empty to represent "Pending Review"
-        notes, // Stores patient's symptoms/complaints
+        patientNotes: notes || "",
+        notes: "",
+        submittedBy: "patient",
+        reviewStatus: "pending",
       });
 
       res.status(201).json(vitals);

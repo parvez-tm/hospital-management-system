@@ -207,6 +207,13 @@ const PatientDeviceReadings = () => {
     }
   };
 
+  const isPendingReviewRecord = (record) =>
+    record.reviewStatus === "pending" ||
+    (!record.reviewStatus && record.submittedBy === "patient" && !record.prescription);
+
+  const hasDoctorPrescription = (record) =>
+    !isPendingReviewRecord(record) && Boolean(record.prescription || record.notes);
+
   // ── Download full report as PDF ──
   const downloadFullReport = () => {
     try {
@@ -372,7 +379,7 @@ const PatientDeviceReadings = () => {
     });
 
     // ── Integrated Rx Prescriptions Section ──
-    const activePrescriptions = vitals.filter(v => v.prescription || v.notes);
+    const activePrescriptions = vitals.filter(hasDoctorPrescription);
     if (activePrescriptions.length > 0) {
       const lastTableY = doc.lastAutoTable.finalY + 8;
       let prescY = lastTableY;
@@ -578,7 +585,7 @@ const PatientDeviceReadings = () => {
       prescY = 20;
     }
 
-    const latestPrescription = vitals.find(v => v.prescription || v.notes);
+    const latestPrescription = vitals.find(hasDoctorPrescription);
     if (latestPrescription) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
@@ -890,7 +897,7 @@ const PatientDeviceReadings = () => {
           </h3>
           <div className="space-y-4">
             {[...vitals].reverse().map((v) => {
-              const isReviewed = v.prescription || v.notes;
+              const isReviewed = !isPendingReviewRecord(v) && Boolean(v.prescription || v.notes);
               return (
                 <div
                   key={v.id}
@@ -926,11 +933,11 @@ const PatientDeviceReadings = () => {
                     </div>
                   </div>
 
-                  {v.notes && !isReviewed && (
+                  {(v.patientNotes || v.notes) && !isReviewed && (
                     <div className="mb-2">
                       <p className="text-xs font-semibold text-gray-500">Your Symptoms / Notes:</p>
                       <p className="text-sm text-gray-700 bg-white/60 p-2.5 rounded-lg border border-gray-100 whitespace-pre-wrap mt-1">
-                        {v.notes}
+                        {v.patientNotes || v.notes}
                       </p>
                     </div>
                   )}

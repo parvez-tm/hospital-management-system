@@ -236,15 +236,22 @@ const PatientDetail = () => {
   };
 
   const handleEditPrescription = (p) => {
+    const isPendingReview =
+      p.reviewStatus === "pending" ||
+      (!p.reviewStatus && p.submittedBy === "patient" && !p.prescription);
     setEditingPrescriptionId(p.id);
     setEditPrescriptionForm({
       medicines: p.prescription || "",
-      notes: p.notes || "",
+      notes: isPendingReview ? "" : p.notes || "",
     });
   };
 
   const handleUpdatePrescription = async (e) => {
     e.preventDefault();
+    if (!editPrescriptionForm.medicines.trim() && !editPrescriptionForm.notes.trim()) {
+      toast.warn("Please enter medicines or doctor advice");
+      return;
+    }
     try {
       await updatePatientVitals(editingPrescriptionId, {
         prescription: editPrescriptionForm.medicines,
@@ -257,6 +264,13 @@ const PatientDetail = () => {
       toast.error(err.response?.data?.message || "Failed to update prescription");
     }
   };
+
+  const isPendingReviewRecord = (record) =>
+    record.reviewStatus === "pending" ||
+    (!record.reviewStatus && record.submittedBy === "patient" && !record.prescription);
+
+  const hasDoctorPrescription = (record) =>
+    !isPendingReviewRecord(record) && Boolean(record.prescription || record.notes);
 
   // Format time ago
   const timeAgo = (dateStr) => {
@@ -444,7 +458,8 @@ const PatientDetail = () => {
     });
 
     // ── High-fidelity Prescription Cards Section ──
-    if (prescriptions.length > 0) {
+    const reportPrescriptions = prescriptions.filter(hasDoctorPrescription);
+    if (reportPrescriptions.length > 0) {
       const lastTableY = doc.lastAutoTable.finalY + 8;
       let prescY = lastTableY;
       
@@ -459,7 +474,7 @@ const PatientDetail = () => {
       doc.text("HISTORICAL PRESCRIPTIONS & CLINICAL NOTES", 15, prescY);
       prescY += 5;
 
-      prescriptions.slice(-2).forEach((p) => {
+      reportPrescriptions.slice(-2).forEach((p) => {
         if (prescY > 165) {
           doc.addPage();
           prescY = 20;
@@ -713,7 +728,7 @@ const PatientDetail = () => {
           </h3>
           <div className="space-y-4">
             {[...prescriptions].reverse().map((p, idx) => {
-              const isReviewRequest = !p.prescription;
+              const isReviewRequest = isPendingReviewRecord(p);
               return (
                 <div
                   key={p.id}
@@ -817,7 +832,7 @@ const PatientDetail = () => {
                           <div className="mb-3">
                             <p className="text-xs font-semibold text-orange-800 mb-1">Patient Symptoms / Notes:</p>
                             <p className="text-sm text-gray-700 bg-white rounded-lg p-3 whitespace-pre-wrap border border-orange-100">
-                              {p.notes || "Routine check-in request."}
+                              {p.patientNotes || p.notes || "Routine check-in request."}
                             </p>
                           </div>
                           <button

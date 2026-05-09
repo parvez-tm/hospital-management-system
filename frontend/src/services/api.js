@@ -25,6 +25,7 @@ export const getAdminDoctors = () => API.get("/admin/doctors");
 export const createAdminDoctor = (data) => API.post("/admin/doctors", data);
 export const getAdminPatients = () => API.get("/admin/patients");
 export const createAdminPatient = (data) => API.post("/admin/patients", data);
+export const updateAdminPatient = (id, data) => API.put(`/admin/patients/${id}`, data);
 export const deleteUser = (id) => API.delete(`/admin/users/${id}`);
 
 // Doctor

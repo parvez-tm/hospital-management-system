@@ -38,7 +38,7 @@ const DoctorPatients = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">My Patients</h1>
-          <p className="text-gray-500 text-sm mt-1">{patients.length} patients in your hospital</p>
+          <p className="text-gray-500 text-sm mt-1">{patients.length} assigned or engaged patients</p>
         </div>
         <div className="relative">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

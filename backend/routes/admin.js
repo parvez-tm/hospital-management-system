@@ -1,6 +1,6 @@
 const express = require("express");
 const { Op } = require("sequelize");
-const { User, PatientVitals } = require("../models");
+const { User, PatientVitals, DeviceSession, HealthReading } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
@@ -36,7 +36,10 @@ router.get("/stats", protect, authorize("admin"), async (req, res) => {
     const pendingReviews = await PatientVitals.count({
       where: {
         prescription: "",
-        notes: { [Op.ne]: "" },
+        [Op.or]: [
+          { reviewStatus: "pending" },
+          { reviewStatus: null, submittedBy: "patient" },
+        ],
       },
     });
 
@@ -180,6 +183,64 @@ router.post("/patients", protect, authorize("admin"), async (req, res) => {
   }
 });
 
+// PUT /api/admin/patients/:id - Update patient assignment/profile from admin
+router.put("/patients/:id", protect, authorize("admin"), async (req, res) => {
+  try {
+    const {
+      name,
+      contactNo,
+      age,
+      height,
+      weight,
+      disease,
+      assignedDoctor,
+    } = req.body;
+
+    const patient = await User.findOne({
+      where: { id: req.params.id, role: "patient" },
+    });
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    if (assignedDoctor) {
+      const doctor = await User.findOne({
+        where: { id: assignedDoctor, role: "doctor" },
+      });
+
+      if (!doctor) {
+        return res.status(400).json({ message: "Assigned doctor was not found" });
+      }
+    }
+
+    await patient.update({
+      name: name !== undefined ? name : patient.name,
+      contactNo: contactNo !== undefined ? contactNo : patient.contactNo,
+      age: age !== undefined ? age || null : patient.age,
+      height: height !== undefined ? height || null : patient.height,
+      weight: weight !== undefined ? weight || null : patient.weight,
+      disease: disease !== undefined ? disease || null : patient.disease,
+      assignedDoctor: assignedDoctor || null,
+    });
+
+    const updatedPatient = await User.findByPk(patient.id, {
+      attributes: safeUserAttributes,
+      include: [
+        {
+          model: User,
+          as: "doctor",
+          attributes: ["id", "name", "specialization"],
+        },
+      ],
+    });
+
+    res.json(updatedPatient);
+  } catch (error) {
+    handleAdminError(res, error);
+  }
+});
+
 // DELETE /api/admin/users/:id - Remove a user (admin only)
 router.delete("/users/:id", protect, authorize("admin"), async (req, res) => {
   try {
@@ -189,10 +250,19 @@ router.delete("/users/:id", protect, authorize("admin"), async (req, res) => {
     }
     // Also delete related vitals if patient
     if (user.role === "patient") {
+      const sessionCount = await DeviceSession.count({ where: { patientId: user.id } });
+      if (sessionCount > 0) {
+        return res.status(409).json({
+          message: "Patient has device monitoring history and cannot be deleted. Keep the account for audit history.",
+        });
+      }
       await PatientVitals.destroy({ where: { patientId: user.id } });
+      await HealthReading.update({ patientId: null }, { where: { patientId: user.id } });
     }
     if (user.role === "doctor") {
+      await User.update({ assignedDoctor: null }, { where: { assignedDoctor: user.id } });
       await PatientVitals.destroy({ where: { doctorId: user.id } });
+      await DeviceSession.update({ doctorId: req.user.id }, { where: { doctorId: user.id } });
     }
     await user.destroy();
     res.json({ message: "User removed successfully" });

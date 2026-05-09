@@ -83,6 +83,14 @@ const PatientProfile = () => {
             <p className="text-xs text-gray-400 mt-1">{profile?.email}</p>
 
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-2 text-sm">
+              {profile?.doctor && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-500">Assigned Doctor</span>
+                  <span className="text-gray-800 font-medium text-right">
+                    Dr. {profile.doctor.name}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500">Role</span>
                 <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">Patient</span>

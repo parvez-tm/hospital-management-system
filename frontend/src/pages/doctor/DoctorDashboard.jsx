@@ -3,7 +3,7 @@ import { getDoctorStats } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import StatCard from "../../components/StatCard";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import {  FiClipboard, FiCalendar } from "react-icons/fi";
+import { FiClipboard, FiCalendar, FiClock, FiUsers } from "react-icons/fi";
 
 const DoctorDashboard = () => {
   const { user } = useAuth();
@@ -37,8 +37,14 @@ const DoctorDashboard = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard
+          title="My Patients"
+          value={stats?.totalPatients || 0}
+          icon={<FiUsers />}
+          color="blue"
+          subtitle="Assigned or engaged"
+        />
         <StatCard
           title="Your Total Records"
           value={stats?.totalRecords || 0}
@@ -52,6 +58,13 @@ const DoctorDashboard = () => {
           icon={<FiCalendar />}
           color="orange"
           subtitle="Added today"
+        />
+        <StatCard
+          title="Pending Reviews"
+          value={stats?.pendingReviews || 0}
+          icon={<FiClock />}
+          color="purple"
+          subtitle="Need prescription"
         />
       </div>
 

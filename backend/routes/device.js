@@ -1,5 +1,5 @@
 const express = require("express");
-const { User, DeviceSession, HealthReading } = require("../models");
+const { User, DeviceSession, HealthReading, PatientVitals } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
@@ -21,6 +21,39 @@ const resolveSessionDoctorId = async (user, patient) => {
   });
 
   return fallbackDoctor ? fallbackDoctor.id : user.id;
+};
+
+const canAccessPatient = async (user, patientId) => {
+  if (user.role === "admin") {
+    return true;
+  }
+
+  if (user.role === "patient") {
+    return String(user.id) === String(patientId);
+  }
+
+  if (user.role !== "doctor") {
+    return false;
+  }
+
+  const patient = await User.findOne({
+    where: { id: patientId, role: "patient" },
+    attributes: ["id", "assignedDoctor"],
+  });
+
+  if (!patient) {
+    return false;
+  }
+
+  if (String(patient.assignedDoctor) === String(user.id)) {
+    return true;
+  }
+
+  const clinicalRecordCount = await PatientVitals.count({
+    where: { patientId, doctorId: user.id },
+  });
+
+  return clinicalRecordCount > 0;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,6 +146,10 @@ router.post(
         return res.status(404).json({ message: "Patient not found" });
       }
 
+      if (!(await canAccessPatient(req.user, patientId))) {
+        return res.status(403).json({ message: "You cannot monitor this patient" });
+      }
+
       const sessionDoctorId = await resolveSessionDoctorId(req.user, patient);
 
       // End any existing active session for this device
@@ -193,6 +230,10 @@ router.post(
         return res.status(403).json({ message: "Unauthorized" });
       }
 
+      if (!(await canAccessPatient(req.user, session.patientId))) {
+        return res.status(403).json({ message: "You cannot stop this monitoring session" });
+      }
+
       session.status = "completed";
       session.endedAt = new Date();
       await session.save();
@@ -243,6 +284,9 @@ router.get(
       if (req.user.role === "patient") {
         whereClause.patientId = req.user.id;
       } else if (patientId) {
+        if (!(await canAccessPatient(req.user, patientId))) {
+          return res.status(403).json({ message: "You cannot view this patient's session" });
+        }
         whereClause.patientId = patientId;
       }
 
@@ -299,6 +343,10 @@ router.get(
         return res.status(403).json({ message: "Patients can only view their own readings" });
       }
 
+      if (!(await canAccessPatient(req.user, req.params.patientId))) {
+        return res.status(403).json({ message: "You cannot view this patient's readings" });
+      }
+
       const limit = parseInt(req.query.limit) || 100;
       const records = await HealthReading.findAll({
         where: { patientId: req.params.patientId },
@@ -327,6 +375,10 @@ router.get(
         return res.status(403).json({ message: "Patients can only view their own latest reading" });
       }
 
+      if (!(await canAccessPatient(req.user, req.params.patientId))) {
+        return res.status(403).json({ message: "You cannot view this patient's readings" });
+      }
+
       const latest = await HealthReading.findOne({
         where: { patientId: req.params.patientId },
         order: [["createdAt", "DESC"]],
@@ -350,6 +402,10 @@ router.get(
       // Authorization: Patients can only access their own stats
       if (req.user.role === "patient" && String(req.user.id) !== String(req.params.patientId)) {
         return res.status(403).json({ message: "Patients can only view their own stats" });
+      }
+
+      if (!(await canAccessPatient(req.user, req.params.patientId))) {
+        return res.status(403).json({ message: "You cannot view this patient's stats" });
       }
 
       const patientId = req.params.patientId;

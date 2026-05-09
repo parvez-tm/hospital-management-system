@@ -49,9 +49,25 @@ const PatientVitals = sequelize.define(
       type: DataTypes.TEXT,
       defaultValue: "",
     },
+    patientNotes: {
+      type: DataTypes.TEXT,
+      defaultValue: "",
+      comment: "Symptoms or request notes submitted by the patient",
+    },
     notes: {
       type: DataTypes.TEXT,
       defaultValue: "",
+      comment: "Doctor advice, follow-up instructions, or clinical notes",
+    },
+    submittedBy: {
+      type: DataTypes.ENUM("doctor", "patient"),
+      allowNull: false,
+      defaultValue: "doctor",
+    },
+    reviewStatus: {
+      type: DataTypes.ENUM("pending", "reviewed"),
+      allowNull: false,
+      defaultValue: "reviewed",
     },
   },
   {

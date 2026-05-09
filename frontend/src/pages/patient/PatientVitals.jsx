@@ -24,7 +24,16 @@ const PatientVitals = () => {
     fetch();
   }, []);
 
+  const isPendingReviewRecord = (record) =>
+    record.reviewStatus === "pending" ||
+    (!record.reviewStatus && record.submittedBy === "patient" && !record.prescription);
+
   const downloadReport = (vital) => {
+    if (isPendingReviewRecord(vital)) {
+      toast.info("This request is still pending doctor review.");
+      return;
+    }
+
     const doc = new jsPDF();
     const user = JSON.parse(localStorage.getItem("userInfo") || "{}");
 
@@ -235,7 +244,9 @@ const PatientVitals = () => {
       </div>
 
       <div className="space-y-4">
-        {vitals.map((v) => (
+        {vitals.map((v) => {
+          const isPending = isPendingReviewRecord(v);
+          return (
           <div key={v.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -251,8 +262,9 @@ const PatientVitals = () => {
               </div>
               <button
                 onClick={() => downloadReport(v)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                title="Download report"
+                disabled={isPending}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isPending ? "Pending doctor review" : "Download report"}
               >
                 <FiDownload /> Report
               </button>
@@ -281,12 +293,18 @@ const PatientVitals = () => {
               </div>
               <div className="text-center p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Status</p>
-                <p className={`text-xs font-bold mt-1 ${v.oxygen >= 95 && v.systolic < 140 ? "text-green-600" : "text-orange-600"}`}>
-                  {v.oxygen >= 95 && v.systolic < 140 ? "✓ Normal" : "⚠ Review"}
+                <p className={`text-xs font-bold mt-1 ${isPending ? "text-orange-600" : v.oxygen >= 95 && v.systolic < 140 ? "text-green-600" : "text-orange-600"}`}>
+                  {isPending ? "Pending" : v.oxygen >= 95 && v.systolic < 140 ? "Normal" : "Review"}
                 </p>
               </div>
             </div>
 
+            {isPending && (v.patientNotes || v.notes) && (
+              <div className="mt-3 p-3 bg-orange-50 rounded-lg">
+                <p className="text-xs font-medium text-orange-700 mb-1">Your symptoms / request</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{v.patientNotes || v.notes}</p>
+              </div>
+            )}
             {v.prescription && (
               <div className="mt-3 p-3 bg-teal-50 rounded-lg">
                 <p className="text-xs font-medium text-teal-700 mb-1">💊 Prescription</p>
@@ -300,7 +318,8 @@ const PatientVitals = () => {
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {vitals.length === 0 && (
