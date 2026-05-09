@@ -9,10 +9,8 @@ import {
   FiMenu,
   FiX,
   FiUser,
-  FiHeart,
   FiClipboard,
 } from "react-icons/fi";
-import { FaHospital } from "react-icons/fa";
 
 const DashboardLayout = () => {
   const { user, logout } = useAuth();
@@ -29,7 +27,6 @@ const DashboardLayout = () => {
     if (user?.role === "admin") {
       return [
         { to: "/admin", icon: <FiHome />, label: "Dashboard" },
-        // { to: "/admin/hospitals", icon: <FaHospital />, label: "Hospitals" },
         { to: "/admin/doctors", icon: <FiUsers />, label: "Doctors" },
         { to: "/admin/patients", icon: <FiUser />, label: "Patients" },
       ];
@@ -115,11 +112,6 @@ const DashboardLayout = () => {
               </span>
             </div>
           </div>
-          {user?.hospitalName && (
-            <p className="text-xs mt-2 opacity-75 flex items-center gap-1">
-              <FaHospital /> {user.hospitalName}
-            </p>
-          )}
         </div>
 
         {/* Nav items */}

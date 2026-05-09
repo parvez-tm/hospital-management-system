@@ -1,9 +1,27 @@
 const express = require("express");
-const { Op } = require("sequelize");
 const { User, DeviceSession, HealthReading } = require("../models");
 const { protect, authorize } = require("../middleware/auth");
 
 const router = express.Router();
+const MONITORING_ROLES = ["doctor", "patient", "admin"];
+
+const resolveSessionDoctorId = async (user, patient) => {
+  if (user.role !== "patient") {
+    return user.id;
+  }
+
+  if (patient.assignedDoctor) {
+    return patient.assignedDoctor;
+  }
+
+  const fallbackDoctor = await User.findOne({
+    where: { role: "doctor" },
+    attributes: ["id"],
+    order: [["id", "ASC"]],
+  });
+
+  return fallbackDoctor ? fallbackDoctor.id : user.id;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/device/health — Receive data from ESP32 (NO AUTH — device endpoint)
@@ -64,18 +82,27 @@ router.post("/health", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/device/session/start — Doctor starts monitoring a patient
+// POST /api/device/session/start — Doctor/Patient starts monitoring
+// Doctors can monitor any patient, Patients can only monitor themselves
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   "/session/start",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
       const { patientId, deviceId = "ESP32-001" } = req.body;
 
       if (!patientId) {
         return res.status(400).json({ message: "patientId is required" });
+      }
+
+      // Authorization: Doctors/Admins can monitor any patient, Patients can only monitor themselves
+      if (req.user.role === "patient" && String(req.user.id) !== String(patientId)) {
+        return res.status(403).json({ message: "Patients can only monitor themselves" });
+      }
+
+      if (!MONITORING_ROLES.includes(req.user.role)) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       // Verify the patient exists
@@ -85,6 +112,8 @@ router.post(
       if (!patient) {
         return res.status(404).json({ message: "Patient not found" });
       }
+
+      const sessionDoctorId = await resolveSessionDoctorId(req.user, patient);
 
       // End any existing active session for this device
       await DeviceSession.update(
@@ -102,7 +131,7 @@ router.post(
       const session = await DeviceSession.create({
         deviceId,
         patientId,
-        doctorId: req.user.id,
+        doctorId: sessionDoctorId,
         startedAt: new Date(),
         status: "active",
       });
@@ -130,12 +159,12 @@ router.post(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/device/session/stop — Doctor stops monitoring
+// POST /api/device/session/stop — Doctor/Patient stops monitoring
+// Doctors can stop any session, Patients can only stop their own sessions
 // ─────────────────────────────────────────────────────────────────────────────
 router.post(
   "/session/stop",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
       const { deviceId = "ESP32-001" } = req.body;
@@ -153,6 +182,15 @@ router.post(
 
       if (!session) {
         return res.status(404).json({ message: "No active session found for this device" });
+      }
+
+      // Authorization: Doctors/Admins can stop any session, Patients can only stop their own
+      if (req.user.role === "patient" && String(session.patientId) !== String(req.user.id)) {
+        return res.status(403).json({ message: "Patients can only stop their own monitoring sessions" });
+      }
+
+      if (!MONITORING_ROLES.includes(req.user.role)) {
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       session.status = "completed";
@@ -182,21 +220,34 @@ router.post(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/device/session/active — Get currently active session
+// Doctors/Admins can check any device, Patients can check their own
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   "/session/active",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
-      const { deviceId = "ESP32-001" } = req.query;
+      const { deviceId = "ESP32-001", patientId } = req.query;
+
+      if (!MONITORING_ROLES.includes(req.user.role)) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      let whereClause = {
+        deviceId,
+        status: "active",
+        endedAt: null,
+      };
+
+      // Patients can only see their own active session
+      if (req.user.role === "patient") {
+        whereClause.patientId = req.user.id;
+      } else if (patientId) {
+        whereClause.patientId = patientId;
+      }
 
       const session = await DeviceSession.findOne({
-        where: {
-          deviceId,
-          status: "active",
-          endedAt: null,
-        },
+        where: whereClause,
         include: [
           { model: User, as: "patient", attributes: { exclude: ["password"] } },
           { model: User, as: "sessionDoctor", attributes: ["id", "name"] },
@@ -236,13 +287,18 @@ router.get(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/device/readings/:patientId — Get health readings for a patient
+// Doctors/Admins can get any patient's readings, Patients can get their own
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   "/readings/:patientId",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
+      // Authorization: Patients can only access their own readings
+      if (req.user.role === "patient" && String(req.user.id) !== String(req.params.patientId)) {
+        return res.status(403).json({ message: "Patients can only view their own readings" });
+      }
+
       const limit = parseInt(req.query.limit) || 100;
       const records = await HealthReading.findAll({
         where: { patientId: req.params.patientId },
@@ -259,13 +315,18 @@ router.get(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/device/readings/:patientId/latest — Get the most recent reading
+// Doctors/Admins can get any patient's latest reading, Patients can get their own
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   "/readings/:patientId/latest",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
+      // Authorization: Patients can only access their own latest reading
+      if (req.user.role === "patient" && String(req.user.id) !== String(req.params.patientId)) {
+        return res.status(403).json({ message: "Patients can only view their own latest reading" });
+      }
+
       const latest = await HealthReading.findOne({
         where: { patientId: req.params.patientId },
         order: [["createdAt", "DESC"]],
@@ -279,13 +340,18 @@ router.get(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/device/readings/:patientId/stats — Get summary statistics
+// Doctors/Admins can get any patient's stats, Patients can get their own
 // ─────────────────────────────────────────────────────────────────────────────
 router.get(
   "/readings/:patientId/stats",
   protect,
-  authorize("doctor", "admin"),
   async (req, res) => {
     try {
+      // Authorization: Patients can only access their own stats
+      if (req.user.role === "patient" && String(req.user.id) !== String(req.params.patientId)) {
+        return res.status(403).json({ message: "Patients can only view their own stats" });
+      }
+
       const patientId = req.params.patientId;
       const count = await HealthReading.count({ where: { patientId } });
 

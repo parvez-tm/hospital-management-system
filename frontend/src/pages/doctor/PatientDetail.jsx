@@ -66,7 +66,7 @@ const PatientDetail = () => {
   const [isStoppingSession, setIsStoppingSession] = useState(false);
   const pollIntervalRef = useRef(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const { data } = await getDoctorPatientDetail(id);
       setPatient(data.patient);
@@ -87,21 +87,21 @@ const PatientDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const fetchAllReadings = async () => {
+  const fetchAllReadings = useCallback(async () => {
     try {
       const { data: readings } = await getDeviceReadings(id, 100);
       if (readings) setAllReadings(readings);
     } catch {
       // silent
     }
-  };
+  }, [id]);
 
   // Check if there's an active session for this patient
   const checkActiveSession = useCallback(async () => {
     try {
-      const { data } = await getActiveSession();
+      const { data } = await getActiveSession("ESP32-001", id);
       if (data.session && String(data.session.patientId) === String(id)) {
         setActiveSession(data.session);
       } else {
@@ -116,7 +116,7 @@ const PatientDetail = () => {
     fetchData();
     checkActiveSession();
     fetchAllReadings();
-  }, [id, checkActiveSession]);
+  }, [fetchData, checkActiveSession, fetchAllReadings]);
 
   // Poll for live readings when session is active
   useEffect(() => {
@@ -146,7 +146,7 @@ const PatientDetail = () => {
       setLiveReadings([]);
       fetchAllReadings();
     }
-  }, [activeSession, id]);
+  }, [activeSession, id, fetchAllReadings]);
 
   const handleStartSession = async () => {
     setIsStartingSession(true);
@@ -290,7 +290,7 @@ const PatientDetail = () => {
       const logoImg = new Image();
       logoImg.src = "/logo.jpeg";
       doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
-    } catch (e) {
+    } catch {
       // Continue without logo
     }
 
@@ -459,7 +459,7 @@ const PatientDetail = () => {
       doc.text("HISTORICAL PRESCRIPTIONS & CLINICAL NOTES", 15, prescY);
       prescY += 5;
 
-      prescriptions.slice(-2).forEach((p, idx) => {
+      prescriptions.slice(-2).forEach((p) => {
         if (prescY > 165) {
           doc.addPage();
           prescY = 20;

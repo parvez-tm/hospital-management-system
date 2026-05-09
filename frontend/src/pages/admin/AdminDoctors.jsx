@@ -1,13 +1,25 @@
 import { useState, useEffect } from "react";
-import { getAdminDoctors, deleteUser } from "../../services/api";
+import { createAdminDoctor, getAdminDoctors, deleteUser } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
-import { FiUsers, FiTrash2, FiSearch, FiPlus } from "react-icons/fi";
+import { FiUsers, FiTrash2, FiSearch, FiPlus, FiX } from "react-icons/fi";
+
+const emptyDoctorForm = {
+  name: "",
+  email: "",
+  username: "",
+  password: "",
+  contactNo: "",
+  specialization: "",
+};
 
 const AdminDoctors = () => {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(emptyDoctorForm);
 
   const fetchDoctors = async () => {
     try {
@@ -24,19 +36,40 @@ const AdminDoctors = () => {
     fetchDoctors();
   }, []);
 
+  const openCreate = () => {
+    setForm(emptyDoctorForm);
+    setShowModal(true);
+  };
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleCreateDoctor = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await createAdminDoctor(form);
+      toast.success("Doctor account created");
+      setShowModal(false);
+      setForm(emptyDoctorForm);
+      fetchDoctors();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to create doctor");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Are you sure you want to remove Dr. ${name}?`)) return;
     try {
       await deleteUser(id);
       toast.success("Doctor removed");
       fetchDoctors();
-    } catch {
-      toast.error("Failed to remove doctor");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to remove doctor");
     }
-  };
-
-  const handleAddDoctor = () => {
-    toast.info("Create doctor flow is not wired yet.");
   };
 
   const filtered = doctors.filter((d) => {
@@ -54,13 +87,13 @@ const AdminDoctors = () => {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">All Doctors</h1>
-          <p className="text-gray-500 text-sm mt-1">{doctors.length} doctors</p>
+          <h1 className="text-2xl font-bold text-gray-800">Doctors</h1>
+          <p className="text-gray-500 text-sm mt-1">{doctors.length} doctors managed by this hospital admin</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={handleAddDoctor}
+            onClick={openCreate}
             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium text-sm hover:from-purple-700 hover:to-indigo-700 shadow-lg shadow-purple-200 transition-all"
           >
             <FiPlus /> Add Doctor
@@ -133,6 +166,39 @@ const AdminDoctors = () => {
           </div>
         )}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">Add Doctor</h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-700">
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDoctor} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input name="name" value={form.name} onChange={handleChange} required placeholder="Full name" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="username" value={form.username} onChange={handleChange} required placeholder="Username" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="email" type="email" value={form.email} onChange={handleChange} required placeholder="Email" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="contactNo" value={form.contactNo} onChange={handleChange} required placeholder="Contact number" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="specialization" value={form.specialization} onChange={handleChange} placeholder="Specialization" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+                <input name="password" type="password" value={form.password} onChange={handleChange} required placeholder="Temporary password" className="py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none text-sm" />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button disabled={saving} type="submit" className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50">
+                  {saving ? "Creating..." : "Create Doctor"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

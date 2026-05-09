@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { register as registerApi, getHospitals } from "../../services/api";
+import { register as registerApi } from "../../services/api";
 import { toast } from "react-toastify";
-import { FiActivity, FiUser, FiLock, FiMail, FiPhone, FiChevronDown } from "react-icons/fi";
-import { FaHospital } from "react-icons/fa";
+import { FiActivity, FiUser, FiLock, FiMail, FiPhone } from "react-icons/fi";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,9 +16,7 @@ const Register = () => {
     age: "",
     height: "",
     weight: "",
-    specialization: "",
   });
-  // const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(false);
   const { loginUser, user } = useAuth();
   const navigate = useNavigate();
@@ -37,15 +34,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const payload = { ...formData };
-      if (formData.role === "doctor") {
-        delete payload.age;
-        delete payload.height;
-        delete payload.weight;
-      }
-      if (formData.role === "patient") {
-        delete payload.specialization;
-      }
+      const payload = { ...formData, role: "patient" };
       const { data } = await registerApi(payload);
       loginUser(data);
       toast.success("Registration successful!");
@@ -56,11 +45,6 @@ const Register = () => {
       setLoading(false);
     }
   };
-
-  const roleOptions = [
-    { value: "patient", label: "Patient", color: "bg-blue-100 text-blue-700 border-blue-300" },
-    { value: "doctor", label: "Doctor", color: "bg-teal-100 text-teal-700 border-teal-300" },
-  ];
 
   const inputClass =
     "w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm";
@@ -73,33 +57,12 @@ const Register = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-200 mb-4">
             <FiActivity className="text-white text-3xl" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Create Account</h1>
-          <p className="text-gray-500 text-sm mt-1">Register as Doctor or Patient</p>
+          <h1 className="text-2xl font-bold text-gray-800">Create Patient Account</h1>
+          <p className="text-gray-500 text-sm mt-1">Doctors are added by the hospital admin</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 p-8">
-          {/* Role Selector */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Register as</label>
-            <div className="grid grid-cols-2 gap-3">
-              {roleOptions.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: r.value })}
-                  className={`py-3 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 ${
-                    formData.role === r.value
-                      ? r.color + " shadow-sm"
-                      : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
 
 
@@ -148,31 +111,20 @@ const Register = () => {
               </div>
             </div>
 
-            {/* Patient-specific: Age, Height, Weight */}
-            {formData.role === "patient" && (
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
-                  <input type="number" name="age" value={formData.age} onChange={handleChange} placeholder="25" className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Height</label>
-                  <input type="text" name="height" value={formData.height} onChange={handleChange} placeholder={"5'8\""} className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Weight</label>
-                  <input type="text" name="weight" value={formData.weight} onChange={handleChange} placeholder="70 kg" className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
-                </div>
-              </div>
-            )}
-
-            {/* Doctor-specific: Specialization */}
-            {formData.role === "doctor" && (
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Specialization</label>
-                <input type="text" name="specialization" value={formData.specialization} onChange={handleChange} placeholder="Cardiology" className="w-full py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                <input type="number" name="age" value={formData.age} onChange={handleChange} placeholder="25" className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
               </div>
-            )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Height</label>
+                <input type="text" name="height" value={formData.height} onChange={handleChange} placeholder={"5'8\""} className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Weight</label>
+                <input type="text" name="weight" value={formData.weight} onChange={handleChange} placeholder="70 kg" className="w-full py-3 px-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm" />
+              </div>
+            </div>
 
             <button
               type="submit"

@@ -39,7 +39,7 @@ const PatientVitals = () => {
       const logoImg = new Image();
       logoImg.src = "/logo.jpeg";
       doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
-    } catch (e) {
+    } catch {
       // Continue without logo
     }
 

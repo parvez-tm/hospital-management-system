@@ -19,11 +19,9 @@ router.post("/register", async (req, res) => {
       username,
       password,
       contactNo,
-      role,
       age,
       height,
       weight,
-      specialization,
     } = req.body;
 
 
@@ -49,11 +47,10 @@ router.post("/register", async (req, res) => {
       username,
       password,
       contactNo,
-      role,
-      age: role === "patient" ? age : null,
-      height: role === "patient" ? height : null,
-      weight: role === "patient" ? weight : null,
-      specialization: role === "doctor" ? specialization : null,
+      role: "patient",
+      age,
+      height,
+      weight,
     });
 
     res.status(201).json({
@@ -61,7 +58,7 @@ router.post("/register", async (req, res) => {
       name: user.name,
       email: user.email,
       username: user.username,
-      role: user.role,
+      role: "patient",
       token: generateToken(user.id),
     });
   } catch (error) {

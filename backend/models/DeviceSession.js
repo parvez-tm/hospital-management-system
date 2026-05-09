@@ -30,6 +30,7 @@ const DeviceSession = sequelize.define(
         model: "users",
         key: "id",
       },
+      comment: "Supervising doctor for the session; patient-started sessions use assigned/fallback doctor",
     },
     startedAt: {
       type: DataTypes.DATE,

@@ -60,7 +60,6 @@ const PatientDashboard = () => {
           Welcome, {user?.name} 👋
         </h1>
         <p className="text-gray-500 text-sm mt-1">
-          {user?.hospitalName && `${user.hospitalName} • `}
           Your health dashboard
         </p>
       </div>

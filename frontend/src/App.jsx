@@ -12,7 +12,6 @@ import AdminLogin from "./pages/auth/AdminLogin";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import ManageHospitals from "./pages/admin/ManageHospitals";
 import AdminDoctors from "./pages/admin/AdminDoctors";
 import AdminPatients from "./pages/admin/AdminPatients";
 
@@ -58,7 +57,6 @@ function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
-            <Route path="hospitals" element={<ManageHospitals />} />
             <Route path="doctors" element={<AdminDoctors />} />
             <Route path="patients" element={<AdminPatients />} />
           </Route>

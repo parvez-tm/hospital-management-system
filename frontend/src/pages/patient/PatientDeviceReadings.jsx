@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
+  getMe,
   getMyHealthReadings,
   getMyHealthStats,
   getPatientVitals,
   getDoctorsForPatient,
   submitPatientReport,
+  startDeviceSession,
+  stopDeviceSession,
+  getActiveSession,
+  getLatestReading,
+  getDeviceReadings,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import { toast } from "react-toastify";
@@ -19,6 +25,7 @@ import {
   FiClock,
   FiPlus,
   FiX,
+  FiStopCircle,
 } from "react-icons/fi";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
@@ -28,12 +35,21 @@ const PatientDeviceReadings = () => {
   const [stats, setStats] = useState(null);
   const [vitals, setVitals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState(null);
 
   const [doctors, setDoctors] = useState([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [patientNotes, setPatientNotes] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+
+  // ── Live monitoring state ──
+  const [activeSession, setActiveSession] = useState(null);
+  const [liveReading, setLiveReading] = useState(null);
+  const [liveReadings, setLiveReadings] = useState([]);
+  const [isStartingSession, setIsStartingSession] = useState(false);
+  const [isStoppingSession, setIsStoppingSession] = useState(false);
+  const pollIntervalRef = useRef(null);
 
   const refreshData = async () => {
     try {
@@ -50,15 +66,30 @@ const PatientDeviceReadings = () => {
     }
   };
 
+  const checkActiveSession = useCallback(async () => {
+    try {
+      const { data } = await getActiveSession();
+      if (data.session) {
+        setActiveSession(data.session);
+      } else {
+        setActiveSession(null);
+      }
+    } catch {
+      // silent
+    }
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [readingsRes, statsRes, vitalsRes, doctorsRes] = await Promise.all([
+        const [userData, readingsRes, statsRes, vitalsRes, doctorsRes] = await Promise.all([
+          getMe(),
           getMyHealthReadings(100),
           getMyHealthStats(),
           getPatientVitals(),
           getDoctorsForPatient(),
         ]);
+        setUserId(userData.data.id);
         setReadings(readingsRes.data);
         setStats(statsRes.data);
         setVitals(vitalsRes.data || []);
@@ -73,7 +104,70 @@ const PatientDeviceReadings = () => {
       }
     };
     fetchData();
-  }, []);
+    checkActiveSession();
+  }, [checkActiveSession]);
+
+  // Poll for live readings when session is active
+  useEffect(() => {
+    if (activeSession && userId) {
+      const poll = async () => {
+        try {
+          const { data: latest } = await getLatestReading(userId);
+          if (latest) setLiveReading(latest);
+
+          const { data: readingsData } = await getDeviceReadings(userId, 20);
+          if (readingsData) setLiveReadings(readingsData);
+        } catch {
+          // silent
+        }
+      };
+
+      poll(); // fetch immediately
+      pollIntervalRef.current = setInterval(poll, 3000);
+
+      return () => {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      };
+    } else {
+      // No active session — stop polling
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      setLiveReading(null);
+      setLiveReadings([]);
+      refreshData();
+    }
+  }, [activeSession, userId]);
+
+  const handleStartSession = async () => {
+    setIsStartingSession(true);
+    try {
+      const { data } = await startDeviceSession({
+        patientId: userId,
+        deviceId: "ESP32-001",
+      });
+      setActiveSession(data.session);
+      toast.success("Monitoring started! Device readings will appear below.");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to start monitoring");
+    } finally {
+      setIsStartingSession(false);
+    }
+  };
+
+  const handleStopSession = async () => {
+    setIsStoppingSession(true);
+    try {
+      const { data } = await stopDeviceSession({ deviceId: "ESP32-001" });
+      setActiveSession(null);
+      toast.success(
+        `Monitoring stopped — ${data.readingsCount} readings captured`
+      );
+      refreshData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to stop monitoring");
+    } finally {
+      setIsStoppingSession(false);
+    }
+  };
 
   const handleReviewRequest = async (e) => {
     e.preventDefault();
@@ -137,20 +231,20 @@ const PatientDeviceReadings = () => {
       doc.line(23, 10, 23, 18);
       doc.line(19, 14, 27, 14);
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("MEDICARE CLINICAL TELEMETRY LOG", 38, 12);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(204, 251, 241); // light teal text
-    doc.text("Certified patient vital signs log captured from remote sensor telemetry.", 38, 20);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.text("MEDICARE CLINICAL TELEMETRY LOG", 38, 12);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(204, 251, 241); // light teal text
+      doc.text("Certified patient vital signs log captured from remote sensor telemetry.", 38, 20);
 
-    // Generation Timestamp on Header Right
-    const genDateStr = new Date().toLocaleDateString("en-US", {
-      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
-    });
+      // Generation Timestamp on Header Right
+      const genDateStr = new Date().toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+      });
     doc.setTextColor(255, 255, 255);
     doc.text(`Generated: ${genDateStr}`, 282, 12, { align: "right" });
     doc.text(`Total Readings: ${readings.length}`, 282, 20, { align: "right" });
@@ -294,7 +388,7 @@ const PatientDeviceReadings = () => {
       doc.text("RECENT PRESCRIPTIONS & ADVICE", 15, prescY);
       prescY += 5;
 
-      activePrescriptions.slice(-2).forEach((p, idx) => {
+      activePrescriptions.slice(-2).forEach((p) => {
         if (prescY > 165) {
           doc.addPage();
           prescY = 20;
@@ -371,7 +465,7 @@ const PatientDeviceReadings = () => {
   };
 
   // ── Download a single reading as a mini report ──
-  const downloadSingleReading = (r) => {
+  const _downloadSingleReading = (r) => {
     const doc = new jsPDF();
 
     // ── Elegant Clinical Header ──
@@ -385,7 +479,7 @@ const PatientDeviceReadings = () => {
       const logoImg = new Image();
       logoImg.src = "/logo.jpeg";
       doc.addImage(logoImg, "JPEG", 15, 4, 20, 20);
-    } catch (e) {
+    } catch {
       // Continue without logo
     }
 
@@ -588,6 +682,23 @@ const PatientDeviceReadings = () => {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          {!activeSession ? (
+            <button
+              onClick={handleStartSession}
+              disabled={isStartingSession}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl font-medium text-sm hover:from-teal-700 hover:to-cyan-700 shadow-lg shadow-teal-200 transition-all disabled:opacity-50"
+            >
+              <FiRadio /> Start Monitoring
+            </button>
+          ) : (
+            <button
+              onClick={handleStopSession}
+              disabled={isStoppingSession}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl font-medium text-sm hover:from-red-700 hover:to-orange-700 shadow-lg shadow-red-200 transition-all disabled:opacity-50"
+            >
+              <FiStopCircle /> Stop Monitoring
+            </button>
+          )}
           {stats && stats.count > 0 && (
             <button
               onClick={() => setShowReviewModal(true)}
@@ -606,6 +717,99 @@ const PatientDeviceReadings = () => {
           )}
         </div>
       </div>
+
+      {/* Live Monitoring Session Display */}
+      {activeSession && (
+        <div className="mb-6 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl shadow-md border-2 border-teal-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              <h3 className="text-lg font-bold text-gray-800">Live Monitoring Active</h3>
+              <span className="text-xs bg-red-100 text-red-800 px-2.5 py-1 rounded-full font-medium">Recording</span>
+            </div>
+            <span className="text-xs text-gray-500">Device: ESP32-001</span>
+          </div>
+
+          {liveReading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="bg-white rounded-lg border border-red-200 p-3 text-center shadow-sm">
+                <FiHeart className="mx-auto text-red-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Heart Rate</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.pulse_rate}
+                </p>
+                <p className="text-xs text-gray-400">bpm</p>
+              </div>
+              <div className="bg-white rounded-lg border border-blue-200 p-3 text-center shadow-sm">
+                <FiWind className="mx-auto text-blue-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Oxygen (SpO₂)</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.spo2}
+                </p>
+                <p className="text-xs text-gray-400">%</p>
+              </div>
+              <div className="bg-white rounded-lg border border-orange-200 p-3 text-center shadow-sm">
+                <FiThermometer className="mx-auto text-orange-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Body Temp</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.body_temp ? liveReading.body_temp.toFixed(1) : "—"}
+                </p>
+                <p className="text-xs text-gray-400">°C</p>
+              </div>
+              <div className="bg-white rounded-lg border border-purple-200 p-3 text-center shadow-sm">
+                <FiActivity className="mx-auto text-purple-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Blood Pressure</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.bp_systolic}/{liveReading.bp_diastolic}
+                </p>
+                <p className="text-xs text-gray-400">mmHg</p>
+              </div>
+              <div className="bg-white rounded-lg border border-teal-200 p-3 text-center shadow-sm">
+                <FiThermometer className="mx-auto text-teal-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Room Temp</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.env_temp ? liveReading.env_temp.toFixed(1) : "—"}
+                </p>
+                <p className="text-xs text-gray-400">°C</p>
+              </div>
+              <div className="bg-white rounded-lg border border-sky-200 p-3 text-center shadow-sm">
+                <FiWind className="mx-auto text-sky-500 mb-1" size={16} />
+                <p className="text-xs text-gray-500 font-medium">Humidity</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {liveReading.humidity ? liveReading.humidity.toFixed(1) : "—"}
+                </p>
+                <p className="text-xs text-gray-400">%</p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <FiRadio className="text-3xl mx-auto mb-2 opacity-50 animate-pulse" />
+              <p>Waiting for device data...</p>
+            </div>
+          )}
+
+          {liveReadings.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-teal-200">
+              <p className="text-xs font-semibold text-gray-600 mb-2">
+                Live Readings: {liveReadings.length} captured
+              </p>
+              <div className="overflow-x-auto">
+                <div className="flex gap-2 pb-2">
+                  {liveReadings.slice(-6).reverse().map((r) => (
+                    <div key={r.id || r.createdAt} className="flex-shrink-0 bg-white rounded-lg border border-gray-200 p-2 text-center text-xs min-w-fit">
+                      <p className="text-gray-400 text-xs">
+                        {new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      <p className="font-bold text-gray-800">{r.pulse_rate} <span className="text-gray-400 text-xs">bpm</span></p>
+                      <p className="text-gray-600">{r.spo2}% | {r.body_temp?.toFixed(1)}°C</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary Stats */}
       {stats && stats.count > 0 && (
@@ -685,7 +889,7 @@ const PatientDeviceReadings = () => {
             Status of Your Doctor Review Requests
           </h3>
           <div className="space-y-4">
-            {[...vitals].reverse().map((v, idx) => {
+            {[...vitals].reverse().map((v) => {
               const isReviewed = v.prescription || v.notes;
               return (
                 <div
