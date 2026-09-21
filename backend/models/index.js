@@ -2,6 +2,7 @@ const User = require("./User");
 const PatientVitals = require("./PatientVitals");
 const DeviceSession = require("./DeviceSession");
 const HealthReading = require("./HealthReading");
+const PatientDocument = require("./PatientDocument");
 
 // --- Associations ---
 
@@ -27,4 +28,10 @@ HealthReading.belongsTo(DeviceSession, { foreignKey: "sessionId", as: "session" 
 User.hasMany(HealthReading, { foreignKey: "patientId", as: "healthReadings" });
 DeviceSession.hasMany(HealthReading, { foreignKey: "sessionId", as: "readings" });
 
-module.exports = { User, PatientVitals, DeviceSession, HealthReading };
+// Patient documents can be uploaded by either the patient or an authorized doctor.
+PatientDocument.belongsTo(User, { foreignKey: "patientId", as: "documentPatient" });
+PatientDocument.belongsTo(User, { foreignKey: "uploaderId", as: "documentUploader" });
+User.hasMany(PatientDocument, { foreignKey: "patientId", as: "patientDocuments" });
+User.hasMany(PatientDocument, { foreignKey: "uploaderId", as: "uploadedDocuments" });
+
+module.exports = { User, PatientVitals, DeviceSession, HealthReading, PatientDocument };

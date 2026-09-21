@@ -13,6 +13,7 @@ import {
   getDeviceReadings,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import { formatBloodPressure, formatVital } from "../../utils/formatters";
 import { toast } from "react-toastify";
 import {
   FiHeart,
@@ -308,7 +309,7 @@ const PatientDeviceReadings = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(220, 38, 38); // red-600
-      doc.text(`${stats.averages.pulse_rate} bpm`, 157, 56);
+      doc.text(`${formatVital(stats.averages.pulse_rate)} bpm`, 157, 56);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
@@ -317,7 +318,7 @@ const PatientDeviceReadings = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(37, 99, 235); // blue-600
-      doc.text(`${stats.averages.spo2}%`, 192, 56);
+      doc.text(`${formatVital(stats.averages.spo2)}%`, 192, 56);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
@@ -335,7 +336,7 @@ const PatientDeviceReadings = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(109, 40, 217); // purple-600
-      doc.text(`${stats.averages.bp_systolic}/${stats.averages.bp_diastolic}`, 254, 56);
+      doc.text(formatBloodPressure(stats.averages.bp_systolic, stats.averages.bp_diastolic), 254, 56);
     } else {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
@@ -349,10 +350,10 @@ const PatientDeviceReadings = () => {
       return [
         new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        r.pulse_rate ? `${r.pulse_rate} bpm` : "—",
-        r.spo2 ? `${r.spo2}%` : "—",
+        r.pulse_rate ? `${formatVital(r.pulse_rate)} bpm` : "—",
+        r.spo2 ? `${formatVital(r.spo2)}%` : "—",
         r.body_temp ? `${Number(r.body_temp).toFixed(1)}°C` : "—",
-        r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic} mmHg` : "—",
+        r.bp_systolic && r.bp_diastolic ? `${formatBloodPressure(r.bp_systolic, r.bp_diastolic)} mmHg` : "—",
         r.env_temp ? `${Number(r.env_temp).toFixed(1)}°C` : "—",
         r.humidity ? `${Number(r.humidity).toFixed(1)}%` : "—",
         status,
@@ -553,11 +554,11 @@ const PatientDeviceReadings = () => {
       startY: 70,
       head: [["Vitals Parameter", "Observed Value", "Standard Reference Range", "Status"]],
       body: [
-        ["Heart / Pulse Rate", r.pulse_rate ? `${r.pulse_rate} bpm` : "—", "50 - 110 bpm", hrOk ? "Normal" : "Review"],
-        ["Blood Oxygen (SpO₂)", r.spo2 ? `${r.spo2}%` : "—", "95% - 100%", spo2Ok ? "Normal" : "Low"],
+        ["Heart / Pulse Rate", r.pulse_rate ? `${formatVital(r.pulse_rate)} bpm` : "—", "50 - 110 bpm", hrOk ? "Normal" : "Review"],
+        ["Blood Oxygen (SpO₂)", r.spo2 ? `${formatVital(r.spo2)}%` : "—", "95% - 100%", spo2Ok ? "Normal" : "Low"],
         ["Body Temperature", r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—", "36.0°C - 37.5°C", r.body_temp >= 36.0 && r.body_temp <= 37.5 ? "Normal" : "Review"],
-        ["Systolic Blood Pressure", r.bp_systolic ? `${r.bp_systolic} mmHg` : "—", "< 140 mmHg", bpOk ? "Normal" : "High"],
-        ["Diastolic Blood Pressure", r.bp_diastolic ? `${r.bp_diastolic} mmHg` : "—", "< 90 mmHg", r.bp_diastolic < 90 ? "Normal" : "High"],
+        ["Systolic Blood Pressure", r.bp_systolic ? `${formatVital(r.bp_systolic)} mmHg` : "—", "< 140 mmHg", bpOk ? "Normal" : "High"],
+        ["Diastolic Blood Pressure", r.bp_diastolic ? `${formatVital(r.bp_diastolic)} mmHg` : "—", "< 90 mmHg", r.bp_diastolic < 90 ? "Normal" : "High"],
         ["Room Temperature", r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—", "—", "—"],
         ["Environment Humidity", r.humidity ? `${r.humidity.toFixed(1)}%` : "—", "—", "—"],
       ],
@@ -743,7 +744,7 @@ const PatientDeviceReadings = () => {
                 <FiHeart className="mx-auto text-red-500 mb-1" size={16} />
                 <p className="text-xs text-gray-500 font-medium">Heart Rate</p>
                 <p className="text-lg font-bold text-gray-800">
-                  {liveReading.pulse_rate}
+                  {formatVital(liveReading.pulse_rate)}
                 </p>
                 <p className="text-xs text-gray-400">bpm</p>
               </div>
@@ -751,7 +752,7 @@ const PatientDeviceReadings = () => {
                 <FiWind className="mx-auto text-blue-500 mb-1" size={16} />
                 <p className="text-xs text-gray-500 font-medium">Oxygen (SpO₂)</p>
                 <p className="text-lg font-bold text-gray-800">
-                  {liveReading.spo2}
+                  {formatVital(liveReading.spo2)}
                 </p>
                 <p className="text-xs text-gray-400">%</p>
               </div>
@@ -767,7 +768,7 @@ const PatientDeviceReadings = () => {
                 <FiActivity className="mx-auto text-purple-500 mb-1" size={16} />
                 <p className="text-xs text-gray-500 font-medium">Blood Pressure</p>
                 <p className="text-lg font-bold text-gray-800">
-                  {liveReading.bp_systolic}/{liveReading.bp_diastolic}
+                  {formatBloodPressure(liveReading.bp_systolic, liveReading.bp_diastolic)}
                 </p>
                 <p className="text-xs text-gray-400">mmHg</p>
               </div>
@@ -807,8 +808,8 @@ const PatientDeviceReadings = () => {
                       <p className="text-gray-400 text-xs">
                         {new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                       </p>
-                      <p className="font-bold text-gray-800">{r.pulse_rate} <span className="text-gray-400 text-xs">bpm</span></p>
-                      <p className="text-gray-600">{r.spo2}% | {r.body_temp?.toFixed(1)}°C</p>
+                      <p className="font-bold text-gray-800">{formatVital(r.pulse_rate)} <span className="text-gray-400 text-xs">bpm</span></p>
+                      <p className="text-gray-600">{formatVital(r.spo2)}% | {r.body_temp?.toFixed(1)}°C</p>
                     </div>
                   ))}
                 </div>
@@ -829,7 +830,7 @@ const PatientDeviceReadings = () => {
               <FiHeart className="mx-auto text-red-500 mb-1" size={18} />
               <p className="text-xs text-gray-500">Avg Heart Rate</p>
               <p className="text-xl font-bold text-gray-800">
-                {stats.averages.pulse_rate}
+                {formatVital(stats.averages.pulse_rate)}
               </p>
               <p className="text-xs text-gray-400">bpm</p>
             </div>
@@ -837,7 +838,7 @@ const PatientDeviceReadings = () => {
               <FiWind className="mx-auto text-blue-500 mb-1" size={18} />
               <p className="text-xs text-gray-500">Avg SpO₂</p>
               <p className="text-xl font-bold text-gray-800">
-                {stats.averages.spo2}
+                {formatVital(stats.averages.spo2)}
               </p>
               <p className="text-xs text-gray-400">%</p>
             </div>
@@ -859,7 +860,7 @@ const PatientDeviceReadings = () => {
               />
               <p className="text-xs text-gray-500">Avg BP</p>
               <p className="text-xl font-bold text-gray-800">
-                {stats.averages.bp_systolic}/{stats.averages.bp_diastolic}
+                {formatBloodPressure(stats.averages.bp_systolic, stats.averages.bp_diastolic)}
               </p>
               <p className="text-xs text-gray-400">mmHg</p>
             </div>
@@ -1016,13 +1017,13 @@ const PatientDeviceReadings = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center font-medium">
-                        {r.pulse_rate}{" "}
+                        {formatVital(r.pulse_rate)}{" "}
                         <span className="text-gray-400 font-normal text-xs">
                           bpm
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center font-medium">
-                        {r.spo2}
+                        {formatVital(r.spo2)}
                         <span className="text-gray-400 font-normal text-xs">
                           %
                         </span>
@@ -1031,7 +1032,7 @@ const PatientDeviceReadings = () => {
                         {r.body_temp ? r.body_temp.toFixed(1) : "—"}°C
                       </td>
                       <td className="px-4 py-3 text-center font-medium">
-                        {r.bp_systolic}/{r.bp_diastolic}
+                        {formatBloodPressure(r.bp_systolic, r.bp_diastolic)}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-500">
                         {r.env_temp ? r.env_temp.toFixed(1) : "—"}°C
@@ -1106,10 +1107,10 @@ const PatientDeviceReadings = () => {
                 <div className="bg-teal-50/50 rounded-xl border border-teal-100/50 p-4">
                   <p className="text-xs font-bold text-teal-800 mb-2">Pre-populated Telemetry Averages:</p>
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div>• Heart Rate: <strong className="text-teal-900">{stats.averages.pulse_rate} bpm</strong></div>
-                    <div>• SpO₂ Oxygen: <strong className="text-teal-900">{stats.averages.spo2}%</strong></div>
+                    <div>• Heart Rate: <strong className="text-teal-900">{formatVital(stats.averages.pulse_rate)} bpm</strong></div>
+                    <div>• SpO₂ Oxygen: <strong className="text-teal-900">{formatVital(stats.averages.spo2)}%</strong></div>
                     <div>• Body Temp: <strong className="text-teal-900">{stats.averages.body_temp}°C</strong></div>
-                    <div>• Blood Pressure: <strong className="text-teal-900">{stats.averages.bp_systolic}/{stats.averages.bp_diastolic} mmHg</strong></div>
+                    <div>• Blood Pressure: <strong className="text-teal-900">{formatBloodPressure(stats.averages.bp_systolic, stats.averages.bp_diastolic)} mmHg</strong></div>
                   </div>
                 </div>
               )}

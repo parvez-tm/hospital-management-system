@@ -1,8 +1,16 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { getPatientStats, getMyLatestReading } from "../../services/api";
+import {
+  getPatientProfile,
+  getPatientStats,
+  getMyLatestReading,
+  updatePatientProfile,
+} from "../../services/api";
 import StatCard from "../../components/StatCard";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import PatientDocuments from "../../components/PatientDocuments";
+import { formatBloodPressure, formatVital } from "../../utils/formatters";
+import { toast } from "react-toastify";
 import {
   FiCalendar,
   FiUsers,
@@ -11,23 +19,29 @@ import {
   FiWind,
   FiActivity,
   FiRadio,
+  FiSave,
+  FiFileText,
 } from "react-icons/fi";
 
 const PatientDashboard = () => {
-  const { user } = useAuth();
+  const { user, loginUser } = useAuth();
   const [stats, setStats] = useState(null);
   const [latestDevice, setLatestDevice] = useState(null);
+  const [ongoingMedicine, setOngoingMedicine] = useState("");
+  const [savingMedicine, setSavingMedicine] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, deviceRes] = await Promise.all([
+        const [statsRes, deviceRes, profileRes] = await Promise.all([
           getPatientStats(),
           getMyLatestReading(),
+          getPatientProfile(),
         ]);
         setStats(statsRes.data);
         setLatestDevice(deviceRes.data);
+        setOngoingMedicine(profileRes.data.ongoingMedicine || "");
       } catch {
         // silent
       } finally {
@@ -40,6 +54,20 @@ const PatientDashboard = () => {
   if (loading) return <LoadingSpinner />;
 
   const lv = stats?.latestVitals;
+
+  const handleSaveMedicine = async (event) => {
+    event.preventDefault();
+    setSavingMedicine(true);
+    try {
+      const { data } = await updatePatientProfile({ ongoingMedicine });
+      loginUser({ ...user, ongoingMedicine: data.ongoingMedicine || "" });
+      toast.success("Ongoing medicines updated");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update medicines");
+    } finally {
+      setSavingMedicine(false);
+    }
+  };
 
   const timeAgo = (dateStr) => {
     if (!dateStr) return "";
@@ -82,7 +110,7 @@ const PatientDashboard = () => {
         />
         <StatCard
           title="Latest BP"
-          value={lv ? `${lv.systolic}/${lv.diastolic}` : "N/A"}
+          value={lv ? formatBloodPressure(lv.systolic, lv.diastolic) : "N/A"}
           icon={<FiHeart />}
           color="red"
           subtitle="Blood pressure"
@@ -143,21 +171,21 @@ const PatientDashboard = () => {
                   <FiHeart className="mx-auto text-red-500 text-xl mb-1" />
                   <p className="text-xs text-gray-500">Blood Pressure</p>
                   <p className="text-lg font-bold text-gray-800">
-                    {lv.systolic}/{lv.diastolic}
+                    {formatBloodPressure(lv.systolic, lv.diastolic)}
                   </p>
                   <p className="text-xs text-gray-400">mmHg</p>
                 </div>
                 <div className="text-center p-4 bg-pink-50 rounded-xl">
                   <FiHeart className="mx-auto text-pink-500 text-xl mb-1" />
                   <p className="text-xs text-gray-500">Pulse</p>
-                  <p className="text-lg font-bold text-gray-800">{lv.pulse}</p>
+                  <p className="text-lg font-bold text-gray-800">{formatVital(lv.pulse)}</p>
                   <p className="text-xs text-gray-400">bpm</p>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-xl">
                   <FiWind className="mx-auto text-blue-500 text-xl mb-1" />
                   <p className="text-xs text-gray-500">Oxygen</p>
                   <p className="text-lg font-bold text-gray-800">
-                    {lv.oxygen}%
+                    {formatVital(lv.oxygen)}%
                   </p>
                   <p className="text-xs text-gray-400">SpO₂</p>
                 </div>
@@ -214,7 +242,7 @@ const PatientDashboard = () => {
               <FiHeart className="mx-auto text-red-500 mb-1" size={16} />
               <p className="text-xs text-gray-500">HR</p>
               <p className="text-lg font-bold text-gray-800">
-                {latestDevice.pulse_rate}
+                 {formatVital(latestDevice.pulse_rate)}
               </p>
               <p className="text-xs text-gray-400">bpm</p>
             </div>
@@ -222,7 +250,7 @@ const PatientDashboard = () => {
               <FiWind className="mx-auto text-blue-500 mb-1" size={16} />
               <p className="text-xs text-gray-500">SpO₂</p>
               <p className="text-lg font-bold text-gray-800">
-                {latestDevice.spo2}
+                 {formatVital(latestDevice.spo2)}
               </p>
               <p className="text-xs text-gray-400">%</p>
             </div>
@@ -246,7 +274,7 @@ const PatientDashboard = () => {
               />
               <p className="text-xs text-gray-500">BP</p>
               <p className="text-lg font-bold text-gray-800">
-                {latestDevice.bp_systolic}/{latestDevice.bp_diastolic}
+                 {formatBloodPressure(latestDevice.bp_systolic, latestDevice.bp_diastolic)}
               </p>
               <p className="text-xs text-gray-400">mmHg</p>
             </div>
@@ -276,6 +304,33 @@ const PatientDashboard = () => {
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <form onSubmit={handleSaveMedicine} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <FiFileText className="text-orange-500" />
+            <h3 className="text-lg font-semibold text-gray-800">Ongoing Medicine</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            Enter medicines you are currently taking so your doctor can see them.
+          </p>
+          <textarea
+            value={ongoingMedicine}
+            onChange={(event) => setOngoingMedicine(event.target.value)}
+            rows={4}
+            placeholder="Example: Metformin 500 mg — once daily"
+            className="w-full py-3 px-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm resize-none"
+          />
+          <button
+            type="submit"
+            disabled={savingMedicine}
+            className="mt-3 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            <FiSave /> {savingMedicine ? "Saving..." : "Save medicines"}
+          </button>
+        </form>
+        <PatientDocuments title="My Shared Documents" />
+      </div>
 
       {/* Quick Actions */}
       <div className="mt-6 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl shadow-lg p-6 text-white">

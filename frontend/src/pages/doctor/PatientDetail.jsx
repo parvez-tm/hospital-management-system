@@ -13,6 +13,8 @@ import {
   deletePatientVitals,
 } from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
+import PatientDocuments from "../../components/PatientDocuments";
+import { formatBloodPressure, formatVital } from "../../utils/formatters";
 import { toast } from "react-toastify";
 import {
   FiArrowLeft,
@@ -428,10 +430,10 @@ const PatientDetail = () => {
       return [
         new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        r.pulse_rate ? `${r.pulse_rate} bpm` : "—",
-        r.spo2 ? `${r.spo2}%` : "—",
+        r.pulse_rate ? `${formatVital(r.pulse_rate)} bpm` : "—",
+        r.spo2 ? `${formatVital(r.spo2)}%` : "—",
         r.body_temp ? `${r.body_temp.toFixed(1)}°C` : "—",
-        r.bp_systolic && r.bp_diastolic ? `${r.bp_systolic}/${r.bp_diastolic} mmHg` : "—",
+        r.bp_systolic && r.bp_diastolic ? `${formatBloodPressure(r.bp_systolic, r.bp_diastolic)} mmHg` : "—",
         r.env_temp ? `${r.env_temp.toFixed(1)}°C` : "—",
         r.humidity ? `${r.humidity.toFixed(1)}%` : "—",
         status,
@@ -674,6 +676,16 @@ const PatientDetail = () => {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-orange-50 rounded-2xl border border-orange-100 p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-orange-700 mb-2">Patient&apos;s ongoing medicine</p>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+            {patient.ongoingMedicine || "No ongoing medicines entered by the patient."}
+          </p>
+        </div>
+        <PatientDocuments patientId={id} title="Patient Documents" />
+      </div>
+
       {/* Prescription & Medical Notes Form */}
       {showPrescriptionForm && (
         <div className="mb-6 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-lg border border-orange-200 p-6">
@@ -819,10 +831,10 @@ const PatientDetail = () => {
                         <div className="mb-3 bg-white/60 rounded-xl p-3 border border-orange-100/50">
                           <p className="text-xs font-bold text-gray-500 mb-1.5">Submitted Telemetry Averages:</p>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-700">
-                            <div>• Heart Rate: <strong className="text-gray-900">{p.pulse} bpm</strong></div>
-                            <div>• SpO₂: <strong className="text-gray-900">{p.oxygen}%</strong></div>
+                            <div>• Heart Rate: <strong className="text-gray-900">{formatVital(p.pulse)} bpm</strong></div>
+                            <div>• SpO₂: <strong className="text-gray-900">{formatVital(p.oxygen)}%</strong></div>
                             <div>• Body Temp: <strong className="text-gray-900">{p.temperature}°C</strong></div>
-                            <div>• BP: <strong className="text-gray-900">{p.systolic}/{p.diastolic} mmHg</strong></div>
+                            <div>• BP: <strong className="text-gray-900">{formatBloodPressure(p.systolic, p.diastolic)} mmHg</strong></div>
                           </div>
                         </div>
                       )}
@@ -912,7 +924,7 @@ const PatientDetail = () => {
                 <FiHeart className="mx-auto text-red-500 mb-1" size={20} />
                 <p className="text-xs text-gray-500">Heart Rate</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {liveReading.pulse_rate || "—"}
+                  {formatVital(liveReading.pulse_rate)}
                 </p>
                 <p className="text-xs text-gray-400">bpm</p>
               </div>
@@ -922,7 +934,7 @@ const PatientDetail = () => {
                 <FiWind className="mx-auto text-blue-500 mb-1" size={20} />
                 <p className="text-xs text-gray-500">SpO₂</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {liveReading.spo2 || "—"}
+                  {formatVital(liveReading.spo2)}
                 </p>
                 <p className="text-xs text-gray-400">%</p>
               </div>
@@ -950,8 +962,7 @@ const PatientDetail = () => {
                 />
                 <p className="text-xs text-gray-500">Blood Pressure</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {liveReading.bp_systolic || "—"}/
-                  {liveReading.bp_diastolic || "—"}
+                  {formatBloodPressure(liveReading.bp_systolic, liveReading.bp_diastolic)}
                 </p>
                 <p className="text-xs text-gray-400">mmHg</p>
               </div>
@@ -1038,10 +1049,10 @@ const PatientDetail = () => {
                             {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
                             {new Date(r.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
                           </td>
-                          <td className="px-3 py-2 text-center font-medium">{r.pulse_rate}</td>
-                          <td className="px-3 py-2 text-center font-medium">{r.spo2}%</td>
+                          <td className="px-3 py-2 text-center font-medium">{formatVital(r.pulse_rate)}</td>
+                          <td className="px-3 py-2 text-center font-medium">{formatVital(r.spo2)}%</td>
                           <td className="px-3 py-2 text-center">{r.body_temp?.toFixed(1)}</td>
-                          <td className="px-3 py-2 text-center">{r.bp_systolic}/{r.bp_diastolic}</td>
+                          <td className="px-3 py-2 text-center">{formatBloodPressure(r.bp_systolic, r.bp_diastolic)}</td>
                           <td className="px-3 py-2 text-center">{r.env_temp?.toFixed(1)}</td>
                           <td className="px-3 py-2 text-center">{r.humidity?.toFixed(1)}%</td>
                         </tr>

@@ -46,6 +46,13 @@ export const getPatientStats = () => API.get("/patient/stats");
 export const getDoctorsForPatient = () => API.get("/patient/doctors");
 export const submitPatientReport = (data) => API.post("/patient/vitals", data);
 
+// Patient documents (the patient and their authorized doctor share this list)
+export const getPatientDocuments = (patientId) =>
+  API.get("/documents", patientId ? { params: { patientId } } : undefined);
+export const uploadPatientDocument = (formData) => API.post("/documents", formData);
+export const downloadPatientDocument = (id) =>
+  API.get(`/documents/${id}/download`, { responseType: "blob" });
+
 // Patient — Device Health Readings (own readings)
 export const getMyHealthReadings = (limit) => API.get("/patient/health-readings", { params: { limit } });
 export const getMyLatestReading = () => API.get("/patient/health-readings/latest");

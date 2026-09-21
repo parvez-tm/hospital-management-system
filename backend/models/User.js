@@ -51,6 +51,12 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    ongoingMedicine: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: "",
+      comment: "Medicines currently being taken by the patient",
+    },
     // Doctor-specific fields
     specialization: {
       type: DataTypes.STRING,

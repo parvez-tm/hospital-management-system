@@ -249,7 +249,14 @@ router.get(
         },
       });
 
-      res.json({ totalPatients, totalRecords, todayRecords, pendingReviews });
+      const recentVitals = await PatientVitals.findAll({
+        where: { doctorId: req.user.id },
+        include: [{ model: User, as: "patient", attributes: ["id", "name"] }],
+        order: [["createdAt", "DESC"]],
+        limit: 8,
+      });
+
+      res.json({ totalPatients, totalRecords, todayRecords, pendingReviews, recentVitals });
     } catch (error) {
       res.status(500).json({ message: error.message });
     }

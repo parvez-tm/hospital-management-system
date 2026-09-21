@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import { FiHeart, FiThermometer, FiWind, FiDownload } from "react-icons/fi";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import { formatBloodPressure, formatVital } from "../../utils/formatters";
 
 const PatientVitals = () => {
   const [vitals, setVitals] = useState([]);
@@ -110,10 +111,10 @@ const PatientVitals = () => {
       startY: 70,
       head: [["Vitals Parameter", "Observed Value", "Standard Reference Range", "Assessment"]],
       body: [
-        ["Systolic Blood Pressure", `${vital.systolic} mmHg`, "< 140 mmHg", vital.systolic < 140 ? "Normal" : "High"],
-        ["Diastolic Blood Pressure", `${vital.diastolic} mmHg`, "< 90 mmHg", vital.diastolic < 90 ? "Normal" : "High"],
-        ["Heart / Pulse Rate", `${vital.pulse} bpm`, "60 - 100 bpm", vital.pulse >= 60 && vital.pulse <= 100 ? "Normal" : "Review"],
-        ["Blood Oxygen (SpO₂)", `${vital.oxygen}%`, "95% - 100%", vital.oxygen >= 95 ? "Normal" : "Low"],
+        ["Systolic Blood Pressure", `${formatVital(vital.systolic)} mmHg`, "< 140 mmHg", vital.systolic < 140 ? "Normal" : "High"],
+        ["Diastolic Blood Pressure", `${formatVital(vital.diastolic)} mmHg`, "< 90 mmHg", vital.diastolic < 90 ? "Normal" : "High"],
+        ["Heart / Pulse Rate", `${formatVital(vital.pulse)} bpm`, "60 - 100 bpm", vital.pulse >= 60 && vital.pulse <= 100 ? "Normal" : "Review"],
+        ["Blood Oxygen (SpO₂)", `${formatVital(vital.oxygen)}%`, "95% - 100%", vital.oxygen >= 95 ? "Normal" : "Low"],
         ["Body Temperature", `${vital.temperature}°F`, "97.0°F - 99.5°F", vital.temperature >= 97 && vital.temperature <= 99.5 ? "Normal" : "Review"],
       ],
       theme: "striped",
@@ -274,17 +275,17 @@ const PatientVitals = () => {
               <div className="text-center p-3 bg-red-50 rounded-lg">
                 <FiHeart className="mx-auto text-red-500 mb-1" />
                 <p className="text-xs text-gray-500">BP</p>
-                <p className="text-sm font-bold text-gray-800">{v.systolic}/{v.diastolic}</p>
+                <p className="text-sm font-bold text-gray-800">{formatBloodPressure(v.systolic, v.diastolic)}</p>
               </div>
               <div className="text-center p-3 bg-pink-50 rounded-lg">
                 <FiHeart className="mx-auto text-pink-500 mb-1" />
                 <p className="text-xs text-gray-500">Pulse</p>
-                <p className="text-sm font-bold text-gray-800">{v.pulse} bpm</p>
+                <p className="text-sm font-bold text-gray-800">{formatVital(v.pulse)} bpm</p>
               </div>
               <div className="text-center p-3 bg-blue-50 rounded-lg">
                 <FiWind className="mx-auto text-blue-500 mb-1" />
                 <p className="text-xs text-gray-500">O₂</p>
-                <p className="text-sm font-bold text-gray-800">{v.oxygen}%</p>
+                <p className="text-sm font-bold text-gray-800">{formatVital(v.oxygen)}%</p>
               </div>
               <div className="text-center p-3 bg-orange-50 rounded-lg">
                 <FiThermometer className="mx-auto text-orange-500 mb-1" />

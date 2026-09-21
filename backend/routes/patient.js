@@ -38,11 +38,12 @@ router.put(
   tenantIsolation,
   async (req, res) => {
     try {
-      const { name, contactNo, age, height, weight, disease } = req.body;
-      await User.update(
-        { name, contactNo, age, height, weight, disease },
-        { where: { id: req.user.id } }
-      );
+      const { name, contactNo, age, height, weight, disease, ongoingMedicine } = req.body;
+      const updates = { name, contactNo, age, height, weight, disease, ongoingMedicine };
+      Object.keys(updates).forEach((key) => {
+        if (updates[key] === undefined) delete updates[key];
+      });
+      await User.update(updates, { where: { id: req.user.id } });
       const patient = await User.findByPk(req.user.id, {
         attributes: { exclude: ["password"] },
         include: [
